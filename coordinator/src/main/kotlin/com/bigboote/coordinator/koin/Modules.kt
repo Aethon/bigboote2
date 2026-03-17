@@ -3,6 +3,11 @@ package com.bigboote.coordinator.koin
 import com.bigboote.coordinator.aggregates.AggregateRepository
 import com.bigboote.coordinator.aggregates.agenttype.AgentTypeCommandHandler
 import com.bigboote.coordinator.aggregates.effort.EffortCommandHandler
+import com.bigboote.coordinator.auth.BearerTokenValidator
+import com.bigboote.coordinator.auth.GatewayTokenValidator
+import com.bigboote.coordinator.auth.StubBearerTokenValidator
+import com.bigboote.coordinator.auth.TokenGenerator
+import com.bigboote.coordinator.auth.TokenStore
 import com.bigboote.coordinator.projections.AgentTypeSummaryProjection
 import com.bigboote.coordinator.projections.EffortSummaryProjection
 import com.bigboote.coordinator.projections.ProjectionRunner
@@ -33,7 +38,10 @@ val InfrastructureModule = module {
 }
 
 val AuthModule = module {
-    // Phase 7: TokenStore, TokenGenerator, BearerTokenValidator, GatewayTokenValidator, AuthPlugin
+    single { TokenStore() }
+    single { TokenGenerator() }
+    single<BearerTokenValidator> { StubBearerTokenValidator() }
+    single { GatewayTokenValidator(get()) }   // delegates to TokenStore
 }
 
 val DomainModule = module {

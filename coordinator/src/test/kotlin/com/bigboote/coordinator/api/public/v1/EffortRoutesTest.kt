@@ -1,6 +1,11 @@
 package com.bigboote.coordinator.api.public.v1
 
 import com.bigboote.coordinator.aggregates.effort.EffortCommandHandler
+import com.bigboote.coordinator.api.error.DomainException
+import com.bigboote.coordinator.auth.BearerTokenValidator
+import com.bigboote.coordinator.auth.GatewayTokenValidator
+import com.bigboote.coordinator.auth.StubBearerTokenValidator
+import com.bigboote.coordinator.auth.TokenStore
 import com.bigboote.coordinator.configureServer
 import com.bigboote.coordinator.projections.EffortSummaryProjection
 import com.bigboote.coordinator.projections.repositories.EffortReadRepository
@@ -9,11 +14,11 @@ import com.bigboote.domain.aggregates.EffortStatus
 import com.bigboote.domain.commands.EffortCommand.*
 import com.bigboote.domain.errors.DomainError
 import com.bigboote.domain.values.*
-import com.bigboote.coordinator.api.error.DomainException
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import io.ktor.client.plugins.defaultrequest.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -33,6 +38,12 @@ import org.koin.dsl.module
  * Infrastructure dependencies (EffortCommandHandler, EffortSummaryProjection,
  * EffortReadRepository) are replaced with MockK stubs so that no KurrentDB or
  * Postgres connection is required.
+ *
+ * Phase 7 addition: all requests to /api/v1/* require
+ * `Authorization: Bearer <token>`. [authenticatedClient] provides a default
+ * test client pre-configured with a stub bearer token. Auth beans
+ * (BearerTokenValidator, TokenStore, GatewayTokenValidator) are registered in
+ * the Koin test module.
  *
  * Test coverage:
  *  - POST /api/v1/efforts/create — happy path + validation failures
@@ -84,6 +95,10 @@ class EffortRoutesTest : DescribeSpec({
                 single { commandHandler }
                 single { projection }
                 single { readRepo }
+                // Phase 7: auth stubs — required because configureServer() installs auth
+                single<BearerTokenValidator> { StubBearerTokenValidator() }
+                single { TokenStore() }
+                single { GatewayTokenValidator(get()) }
             })
         }
     }
@@ -101,6 +116,7 @@ class EffortRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
                     setBody(
@@ -129,6 +145,7 @@ class EffortRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
                     setBody(
@@ -152,6 +169,7 @@ class EffortRoutesTest : DescribeSpec({
         it("returns 400 when name is blank") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
                     setBody(
@@ -173,6 +191,7 @@ class EffortRoutesTest : DescribeSpec({
         it("returns 400 when goal is blank") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
                     setBody(
@@ -194,6 +213,7 @@ class EffortRoutesTest : DescribeSpec({
         it("returns 400 when collaborators list is empty") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
                     setBody(
@@ -214,6 +234,7 @@ class EffortRoutesTest : DescribeSpec({
         it("returns 400 when no collaborator has isLead=true") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
                     setBody(
@@ -237,6 +258,7 @@ class EffortRoutesTest : DescribeSpec({
         it("returns 400 when more than one collaborator has isLead=true") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
                     setBody(
@@ -261,6 +283,7 @@ class EffortRoutesTest : DescribeSpec({
         it("returns 400 when AGENT collaborator is missing agentTypeId") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
                     setBody(
@@ -291,6 +314,7 @@ class EffortRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts")
 
                 response.status shouldBe HttpStatusCode.OK
@@ -303,6 +327,7 @@ class EffortRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts")
 
                 response.status shouldBe HttpStatusCode.OK
@@ -318,6 +343,7 @@ class EffortRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts?status=active")
 
                 response.status shouldBe HttpStatusCode.OK
@@ -327,6 +353,7 @@ class EffortRoutesTest : DescribeSpec({
         it("returns 400 for an unrecognised status parameter") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts?status=bogus")
 
                 response.status shouldBe HttpStatusCode.BadRequest
@@ -344,6 +371,7 @@ class EffortRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts/${effortId.value}")
 
                 response.status shouldBe HttpStatusCode.OK
@@ -362,6 +390,7 @@ class EffortRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts/${effortId.value}")
 
                 response.status shouldBe HttpStatusCode.NotFound
@@ -371,6 +400,7 @@ class EffortRoutesTest : DescribeSpec({
         it("returns 400 when effortId path param is invalid") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts/not-a-valid-id")
 
                 // EffortId constructor throws IllegalArgumentException for non-"effort:..." IDs,
@@ -389,6 +419,7 @@ class EffortRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/start")
 
                 response.status shouldBe HttpStatusCode.OK
@@ -404,6 +435,7 @@ class EffortRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/start")
 
                 response.status shouldBe HttpStatusCode.UnprocessableEntity
@@ -420,6 +452,7 @@ class EffortRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/pause")
 
                 response.status shouldBe HttpStatusCode.OK
@@ -437,6 +470,7 @@ class EffortRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/resume")
 
                 response.status shouldBe HttpStatusCode.OK
@@ -454,6 +488,7 @@ class EffortRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/close")
 
                 response.status shouldBe HttpStatusCode.OK
@@ -467,6 +502,7 @@ class EffortRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/close")
 
                 response.status shouldBe HttpStatusCode.UnprocessableEntity
@@ -474,3 +510,19 @@ class EffortRoutesTest : DescribeSpec({
         }
     }
 })
+
+// ---- test helpers ----
+
+/**
+ * Creates a test HTTP client pre-configured with the `Authorization: Bearer test-token`
+ * header so that all requests pass the Phase 7 public-api auth check without
+ * manually setting the header on every call.
+ *
+ * Uses [StubBearerTokenValidator] which accepts any non-blank token, so
+ * "test-token" is always valid.
+ */
+private fun ApplicationTestBuilder.authenticatedClient() = createClient {
+    defaultRequest {
+        headers.append(HttpHeaders.Authorization, "Bearer test-token")
+    }
+}
