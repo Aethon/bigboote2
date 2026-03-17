@@ -2,6 +2,10 @@ package com.bigboote.coordinator.api.public.v1
 
 import com.bigboote.coordinator.aggregates.agenttype.AgentTypeCommandHandler
 import com.bigboote.coordinator.api.error.DomainException
+import com.bigboote.coordinator.auth.BearerTokenValidator
+import com.bigboote.coordinator.auth.GatewayTokenValidator
+import com.bigboote.coordinator.auth.StubBearerTokenValidator
+import com.bigboote.coordinator.auth.TokenStore
 import com.bigboote.coordinator.configureServer
 import com.bigboote.coordinator.projections.AgentTypeSummaryProjection
 import com.bigboote.coordinator.projections.repositories.AgentTypeReadRepository
@@ -12,13 +16,13 @@ import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import io.ktor.client.plugins.defaultrequest.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import io.mockk.coEvery
 import io.mockk.coJustRun
-import io.mockk.justRun
 import io.mockk.mockk
 import kotlinx.datetime.Clock
 import org.koin.core.context.startKoin
@@ -32,6 +36,12 @@ import org.koin.dsl.module
  * Infrastructure dependencies (AgentTypeCommandHandler, AgentTypeSummaryProjection,
  * AgentTypeReadRepository) are replaced with MockK stubs so that no KurrentDB or
  * Postgres connection is required.
+ *
+ * Phase 7 addition: all requests to /api/v1/* require
+ * `Authorization: Bearer <token>`. [authenticatedClient] provides a default
+ * test client pre-configured with a stub bearer token. Auth beans
+ * (BearerTokenValidator, TokenStore, GatewayTokenValidator) are registered in
+ * the Koin test module.
  *
  * Test coverage:
  *  - POST /api/v1/agent-types/create — happy path + validation failures
@@ -90,6 +100,10 @@ class AgentTypeRoutesTest : DescribeSpec({
                 single { commandHandler }
                 single { projection }
                 single { readRepo }
+                // Phase 7: auth stubs — required because configureServer() installs auth
+                single<BearerTokenValidator> { StubBearerTokenValidator() }
+                single { TokenStore() }
+                single { GatewayTokenValidator(get()) }
             })
         }
     }
@@ -107,6 +121,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
                     setBody(validCreateBody)
@@ -124,6 +139,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
                     setBody(
@@ -148,6 +164,7 @@ class AgentTypeRoutesTest : DescribeSpec({
         it("returns 400 when id is blank") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
                     setBody(validCreateBody.replace("\"agenttype:lead-engineer\"", "\"\""))
@@ -161,6 +178,7 @@ class AgentTypeRoutesTest : DescribeSpec({
         it("returns 400 when name is blank") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
                     setBody(validCreateBody.replace("\"Lead Engineer\"", "\"   \""))
@@ -174,6 +192,7 @@ class AgentTypeRoutesTest : DescribeSpec({
         it("returns 400 when model is blank") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
                     setBody(validCreateBody.replace("\"claude-opus-4-6\"", "\"\""))
@@ -187,6 +206,7 @@ class AgentTypeRoutesTest : DescribeSpec({
         it("returns 400 when systemPrompt is blank") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
                     setBody(validCreateBody.replace("\"You are a lead software engineer.\"", "\"\""))
@@ -200,6 +220,7 @@ class AgentTypeRoutesTest : DescribeSpec({
         it("returns 400 when maxTokens is zero or negative") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
                     setBody(validCreateBody.replace("8192", "0"))
@@ -213,6 +234,7 @@ class AgentTypeRoutesTest : DescribeSpec({
         it("returns 400 when temperature is out of range") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
                     setBody(validCreateBody.replace("0.7", "1.5"))
@@ -226,6 +248,7 @@ class AgentTypeRoutesTest : DescribeSpec({
         it("returns 400 when dockerImage is blank") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
                     setBody(validCreateBody.replace("\"bigboote/agent:latest\"", "\"\""))
@@ -239,6 +262,7 @@ class AgentTypeRoutesTest : DescribeSpec({
         it("returns 400 when spawnStrategy is blank") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
                     setBody(validCreateBody.replace("\"DOCKER\"", "\"\""))
@@ -254,6 +278,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
                     setBody(validCreateBody.replace("\"agenttype:lead-engineer\"", "\"agt:lead-engineer\""))
@@ -276,6 +301,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.get("/api/v1/agent-types")
 
                 response.status shouldBe HttpStatusCode.OK
@@ -288,6 +314,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.get("/api/v1/agent-types")
 
                 response.status shouldBe HttpStatusCode.OK
@@ -311,6 +338,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.get("/api/v1/agent-types/${agentTypeId.value}")
 
                 response.status shouldBe HttpStatusCode.OK
@@ -329,17 +357,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
-                val response = client.get("/api/v1/agent-types/${agentTypeId.value}")
-
-                response.status shouldBe HttpStatusCode.NotFound
-            }
-        }
-
-        it("returns 404 when DomainException(AgentTypeNotFound) is thrown") {
-            coEvery { readRepo.get(agentTypeId) } returns null
-
-            testApplication {
-                application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.get("/api/v1/agent-types/${agentTypeId.value}")
 
                 response.status shouldBe HttpStatusCode.NotFound
@@ -349,6 +367,7 @@ class AgentTypeRoutesTest : DescribeSpec({
         it("returns 400 when agentTypeId path param lacks the agenttype: prefix") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.get("/api/v1/agent-types/not-a-valid-id")
 
                 // AgentTypeId constructor rejects values without "agenttype:" prefix;
@@ -367,6 +386,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/${agentTypeId.value}/update") {
                     contentType(ContentType.Application.Json)
                     setBody("""{ "name": "Senior Lead Engineer" }""")
@@ -384,6 +404,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/${agentTypeId.value}/update") {
                     contentType(ContentType.Application.Json)
                     setBody("""{ "modelParams": { "maxTokens": 16384 } }""")
@@ -398,6 +419,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/${agentTypeId.value}/update") {
                     contentType(ContentType.Application.Json)
                     setBody("""{ "tools": [] }""")
@@ -414,6 +436,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/${agentTypeId.value}/update") {
                     contentType(ContentType.Application.Json)
                     setBody("""{ "name": "Ghost" }""")
@@ -426,6 +449,7 @@ class AgentTypeRoutesTest : DescribeSpec({
         it("returns 400 when agentTypeId path param is invalid") {
             testApplication {
                 application { configureServer() }
+                val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/invalid-id/update") {
                     contentType(ContentType.Application.Json)
                     setBody("""{ "name": "Whatever" }""")
@@ -436,3 +460,19 @@ class AgentTypeRoutesTest : DescribeSpec({
         }
     }
 })
+
+// ---- test helpers ----
+
+/**
+ * Creates a test HTTP client pre-configured with the `Authorization: Bearer test-token`
+ * header so that all requests pass the Phase 7 public-api auth check without
+ * manually setting the header on every call.
+ *
+ * Uses [StubBearerTokenValidator] which accepts any non-blank token, so
+ * "test-token" is always valid.
+ */
+private fun ApplicationTestBuilder.authenticatedClient() = createClient {
+    defaultRequest {
+        headers.append(HttpHeaders.Authorization, "Bearer test-token")
+    }
+}
