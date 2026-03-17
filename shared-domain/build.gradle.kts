@@ -1,3 +1,7 @@
+plugins {
+    id("buildsrc.convention.kotlin-jvm")
+}
+
 dependencies {
     implementation(libs.kotlinx.serialization)
     implementation(libs.kotlinx.coroutines.core)

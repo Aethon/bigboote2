@@ -1,9 +1,6 @@
 plugins {
+    id("buildsrc.convention.kotlin-jvm")
     alias(libs.plugins.ktor)
-}
-
-application {
-    mainClass.set("com.bigboote.agent.ApplicationKt")
 }
 
 ktor {
@@ -26,14 +23,21 @@ dependencies {
     implementation(libs.koin.ktor)
     implementation(libs.koin.core)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.datetime)
     implementation(libs.logback.classic)
 
     // Anthropic client (xemantic) — add to libs.versions.toml when version confirmed
     // implementation(libs.xemantic.anthropic)
 
     testImplementation(libs.ktor.server.test.host)
+    testImplementation(libs.ktor.server.core)
     testImplementation(libs.kotest.runner)
     testImplementation(libs.kotest.assertions)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
 }
+
+application {
+    mainClass.set("com.bigboote.agent.ApplicationKt")
+}
+
