@@ -15,18 +15,15 @@ private val logger = LoggerFactory.getLogger(ProjectionRunner::class.java)
  * which subscribes to their respective event streams. On shutdown, [stop] cancels
  * all active subscriptions.
  *
- * DECISION: Phase 5 accepts only [EffortSummaryProjection] — the remaining
- * projections (AgentInstanceStatusProjection, ConversationProjection,
- * DocumentListProjection) are stubs in their respective phases and will be
- * added to the constructor and Koin wiring then.
- *
- * The constructor accepts the full set of Phase 5 projections; stubs from
- * later phases can be added to this signature as they are implemented.
+ * Phase 5: [EffortSummaryProjection]
+ * Phase 6: [AgentTypeSummaryProjection]  ← added here
+ * Phase 11+: ConversationProjection, DocumentListProjection (add to constructor then)
  *
  * See Architecture doc Section 8.
  */
 class ProjectionRunner(
     private val effortSummaryProjection: EffortSummaryProjection,
+    private val agentTypeSummaryProjection: AgentTypeSummaryProjection,
     // Phase 11+: private val conversationProjection: Projection,
     // Phase 14+: private val documentListProjection: Projection,
 ) {
@@ -34,14 +31,15 @@ class ProjectionRunner(
 
     /**
      * Start all projections in a background coroutine so startup is non-blocking.
-     * Each projection's [Projection.start] is a suspend function that reads the DB
-     * to discover known streams and then starts catch-up subscriptions.
+     * Each projection's [Projection.start] reads the DB to discover known streams
+     * and then starts catch-up subscriptions.
      */
     fun start() {
         scope.launch {
             logger.info("ProjectionRunner starting projections...")
             try {
                 effortSummaryProjection.start()
+                agentTypeSummaryProjection.start()
                 logger.info("ProjectionRunner: all projections started")
             } catch (e: Exception) {
                 logger.error("ProjectionRunner: error starting projections", e)
@@ -55,6 +53,7 @@ class ProjectionRunner(
      */
     fun stop() {
         effortSummaryProjection.stop()
+        agentTypeSummaryProjection.stop()
         logger.info("ProjectionRunner: all projections stopped")
     }
 }
