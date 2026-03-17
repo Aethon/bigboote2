@@ -1,10 +1,7 @@
 .gradle/
 .kotlin/
 build/
-*.jar
 out/
-.idea/
-*.iml
 .DS_Store
 local.properties
 node_modules/
