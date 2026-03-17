@@ -2,6 +2,7 @@ package com.bigboote.coordinator
 
 import com.bigboote.infra.config.BigbooteConfig
 import com.bigboote.infra.db.DatabaseFactory
+import com.bigboote.infra.koin.sharedInfraModule
 import io.ktor.server.application.Application
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -15,6 +16,7 @@ private val logger = LoggerFactory.getLogger("com.bigboote.coordinator.Applicati
 fun main() {
     startKoin {
         modules(
+            sharedInfraModule,
             InfrastructureModule,
             AuthModule,
             DomainModule,
@@ -31,7 +33,9 @@ fun main() {
     val config = koin.get<BigbooteConfig>()
     val databaseFactory = koin.get<DatabaseFactory>()
 
-    // Connect to Postgres — logs confirmation on success
+    // Connect to Postgres — DatabaseFactory.connect() initializes the pool
+    // and logs internally; we discard the returned Database reference here
+    // because Exposed's Database is not on coordinator's compile classpath.
     databaseFactory.connect()
     logger.info("Postgres connection established at {}", config.database.jdbcUrl)
 

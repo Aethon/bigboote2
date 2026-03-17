@@ -36,6 +36,16 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.logback.classic)
 
+    // Exposed (needed for DatabaseFactory return type and future Projections in Phase 6)
+    implementation(libs.exposed.core)
+    implementation(libs.exposed.jdbc)
+    implementation(libs.exposed.kotlin.datetime)
+    implementation(libs.postgresql)
+    implementation(libs.hikari)
+
+    // KurrentDB (needed for EventStore subscriptions used by Reactors/Projections)
+    implementation(libs.kurrentdb.client)
+
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotest.runner)
     testImplementation(libs.kotest.assertions)

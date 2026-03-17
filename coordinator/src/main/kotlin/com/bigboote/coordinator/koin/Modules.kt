@@ -1,12 +1,5 @@
 package com.bigboote.coordinator.koin
 
-import com.bigboote.events.eventstore.EventStore
-import com.bigboote.infra.config.BigbooteConfig
-import com.bigboote.infra.db.DatabaseFactory
-import com.bigboote.infra.eventstore.KurrentEventStore
-import com.eventstore.dbclient.EventStoreDBClient
-import com.eventstore.dbclient.EventStoreDBConnectionString
-import com.eventstore.dbclient.EventStoreDBPersistentSubscriptionsClient
 import org.koin.dsl.module
 
 /**
@@ -15,37 +8,19 @@ import org.koin.dsl.module
  * from later phases contain stub/no-op beans and will be populated when
  * their respective phases are implemented.
  *
+ * Infrastructure beans (BigbooteConfig, EventStore, DatabaseFactory, KurrentDB
+ * clients) are provided by sharedInfraModule from shared-infra — NOT duplicated
+ * here. The coordinator's InfrastructureModule is reserved for coordinator-only
+ * infra beans (e.g. AggregateRepository in Phase 5).
+ *
  * See Architecture doc Section 13.1 for the full target wiring.
  */
 
 val InfrastructureModule = module {
-    single<BigbooteConfig> { BigbooteConfig.fromEnvironment() }
-
-    single<EventStoreDBClient> {
-        val config = get<BigbooteConfig>()
-        val settings = EventStoreDBConnectionString.parseOrThrow(config.kurrent.connectionString)
-        EventStoreDBClient.create(settings)
-    }
-
-    single<EventStoreDBPersistentSubscriptionsClient> {
-        val config = get<BigbooteConfig>()
-        val settings = EventStoreDBConnectionString.parseOrThrow(config.kurrent.connectionString)
-        EventStoreDBPersistentSubscriptionsClient.create(settings)
-    }
-
-    single<EventStore> {
-        KurrentEventStore(
-            client = get(),
-            persistentSubscriptionsClient = get(),
-        )
-    }
-
-    single<DatabaseFactory> {
-        val config = get<BigbooteConfig>()
-        DatabaseFactory(config.database)
-    }
-
-    // DECISION: AggregateRepository will be added in Phase 5 when EffortCommandHandler is built.
+    // DECISION: Shared infra beans (EventStore, DatabaseFactory, BigbooteConfig,
+    // KurrentDB clients) are wired in sharedInfraModule and loaded separately in
+    // Application.kt. This module holds coordinator-only infra beans.
+    // Phase 5: AggregateRepository
 }
 
 val AuthModule = module {
