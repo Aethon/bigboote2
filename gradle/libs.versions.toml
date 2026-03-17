@@ -68,6 +68,9 @@ jnanoid                  = { module = "com.aventrix.jnanoid:jnanoid",           
 # Logging
 logback-classic          = { module = "ch.qos.logback:logback-classic",        version.ref = "logback" }
 
+# Kotlin Reflect
+kotlin-reflect           = { module = "org.jetbrains.kotlin:kotlin-reflect",    version.ref = "kotlin" }
+
 # Testing
 kotest-runner            = { module = "io.kotest:kotest-runner-junit5",         version.ref = "kotest" }
 kotest-assertions        = { module = "io.kotest:kotest-assertions-core",       version.ref = "kotest" }
