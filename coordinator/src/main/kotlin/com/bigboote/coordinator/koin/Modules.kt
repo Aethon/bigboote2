@@ -1,5 +1,11 @@
 package com.bigboote.coordinator.koin
 
+import com.bigboote.coordinator.aggregates.AggregateRepository
+import com.bigboote.coordinator.aggregates.effort.EffortCommandHandler
+import com.bigboote.coordinator.projections.EffortSummaryProjection
+import com.bigboote.coordinator.projections.ProjectionRunner
+import com.bigboote.coordinator.projections.repositories.EffortReadRepository
+import kotlinx.datetime.Clock
 import org.koin.dsl.module
 
 /**
@@ -11,7 +17,7 @@ import org.koin.dsl.module
  * Infrastructure beans (BigbooteConfig, EventStore, DatabaseFactory, KurrentDB
  * clients) are provided by sharedInfraModule from shared-infra — NOT duplicated
  * here. The coordinator's InfrastructureModule is reserved for coordinator-only
- * infra beans (e.g. AggregateRepository in Phase 5).
+ * infra beans.
  *
  * See Architecture doc Section 13.1 for the full target wiring.
  */
@@ -20,7 +26,7 @@ val InfrastructureModule = module {
     // DECISION: Shared infra beans (EventStore, DatabaseFactory, BigbooteConfig,
     // KurrentDB clients) are wired in sharedInfraModule and loaded separately in
     // Application.kt. This module holds coordinator-only infra beans.
-    // Phase 5: AggregateRepository
+    single { AggregateRepository(get()) }
 }
 
 val AuthModule = module {
@@ -28,13 +34,21 @@ val AuthModule = module {
 }
 
 val DomainModule = module {
-    // Phase 5+: EffortCommandHandler, AgentTypeCommandHandler, ConversationCommandHandler,
-    //           DocumentCommandHandler, SystemCollaborator
+    // Clock.System passed per Architecture doc Section 13.1 for testability.
+    single { EffortCommandHandler(get(), Clock.System) }
+    // Phase 6:  AgentTypeCommandHandler
+    // Phase 11: ConversationCommandHandler
+    // Phase 14: DocumentCommandHandler
+    // Phase 15: SystemCollaborator
 }
 
 val ProjectionModule = module {
-    // Phase 5+: EffortSummaryProjection, AgentInstanceStatusProjection, ConversationProjection,
-    //           DocumentListProjection, read repositories, ProjectionRunner
+    single { EffortSummaryProjection(get()) }
+    single { EffortReadRepository() }
+    single { ProjectionRunner(get()) }
+    // Phase 6+:  AgentInstanceStatusProjection, AgentInstanceReadRepository
+    // Phase 11+: ConversationProjection, ConversationReadRepository
+    // Phase 14+: DocumentListProjection, DocumentReadRepository
 }
 
 val ReactorModule = module {

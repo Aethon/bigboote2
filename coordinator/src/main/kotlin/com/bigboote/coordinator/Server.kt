@@ -1,6 +1,7 @@
 package com.bigboote.coordinator
 
 import com.bigboote.coordinator.api.error.configureErrorHandling
+import com.bigboote.coordinator.api.public.v1.effortRoutes
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
@@ -42,7 +43,7 @@ fun Application.configureServer() {
 
         // Stub route groups — populated in later phases
         route("/api/v1") {
-            // Phase 5: Effort routes
+            effortRoutes()   // Phase 5
             // Phase 6: AgentType routes
             // Phase 11: Conversation routes
             // Phase 14: Document routes
