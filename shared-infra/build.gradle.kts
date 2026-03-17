@@ -10,10 +10,12 @@ dependencies {
     implementation(libs.postgresql)
     implementation(libs.hikari)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.koin.core)
     implementation(libs.logback.classic)
 
     testImplementation(libs.kotest.runner)
     testImplementation(libs.kotest.assertions)
+    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
     testImplementation(libs.testcontainers.core)
     testImplementation(libs.testcontainers.postgresql)
