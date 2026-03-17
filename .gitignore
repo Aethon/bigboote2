@@ -1,4 +1,17 @@
+.gradle/
+.kotlin/
+build/
+*.jar
+out/
+.idea/
+*.iml
 .DS_Store
+local.properties
+node_modules/
+vue-ui/dist/
+vue-ui/.vite/
+*.env.local
+*.env.development.local
 
 # Auto Claude data directory
 .auto-claude/
