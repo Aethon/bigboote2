@@ -15,7 +15,7 @@ fun Application.configureServer() {
             encodeDefaults = true
         })
     }
-    install(Koin) { /* already started in main */ }
+    // Koin is started in main() or test setup, plugin just provides integration
 
     routing {
         agentControlRoutes()

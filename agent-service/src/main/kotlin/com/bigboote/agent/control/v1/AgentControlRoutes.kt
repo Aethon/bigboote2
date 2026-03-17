@@ -14,7 +14,7 @@ import org.koin.ktor.ext.inject
  * the Coordinator calls into the agent-service.
  */
 fun Route.agentControlRoutes() {
-    val handler by inject<AgentControlHandler>()
+    val handler by application.inject<AgentControlHandler>()
 
     route("/control/v1") {
 
