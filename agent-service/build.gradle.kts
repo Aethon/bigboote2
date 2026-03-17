@@ -41,3 +41,10 @@ application {
     mainClass.set("com.bigboote.agent.ApplicationKt")
 }
 
+tasks {
+    named("distZip") { dependsOn("shadowJar") }
+    named("distTar") { dependsOn("shadowJar") }
+    named("startScripts") { dependsOn("shadowJar") }
+    named("startShadowScripts") { dependsOn("jar") }
+}
+
