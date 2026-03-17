@@ -1,8 +1,17 @@
 package com.bigboote.agent.koin
 
+import com.bigboote.agent.control.v1.AgentControlHandler
+import com.bigboote.agent.gateway.AgentGatewayClient
+import com.bigboote.agent.gateway.GatewayConfig
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
 import org.koin.dsl.module
 
-// DECISION: Stub Koin module for bootstrap phase. Will be populated when agent-service phases begin.
 val AgentServiceModule = module {
-    // Agent loop, tool registry, control API handlers
+    single { GatewayConfig.fromEnvironment() }
+    single { AgentGatewayClient(get(), HttpClient(CIO)) }
+    single { AgentControlHandler() }
+
+    // DECISION: Loop components (AgentLoopStepper, KurrentEventStream, ConversationSseClient)
+    // stubbed out for Phase 8. Will be wired in Phase 9 (loop integration).
 }
