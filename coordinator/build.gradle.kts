@@ -24,6 +24,7 @@ dependencies {
     implementation(libs.ktor.server.websockets)
     implementation(libs.ktor.server.sse)
     implementation(libs.ktor.server.content.neg)
+    implementation(libs.ktor.server.status.pages)
     implementation(libs.ktor.server.auth)
     implementation(libs.ktor.server.auth.jwt)
     implementation(libs.ktor.serialization.json)
@@ -34,6 +35,16 @@ dependencies {
     implementation(libs.koin.core)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.logback.classic)
+
+    // Exposed (needed for DatabaseFactory return type and future Projections in Phase 6)
+    implementation(libs.exposed.core)
+    implementation(libs.exposed.jdbc)
+    implementation(libs.exposed.kotlin.datetime)
+    implementation(libs.postgresql)
+    implementation(libs.hikari)
+
+    // KurrentDB (needed for EventStore subscriptions used by Reactors/Projections)
+    implementation(libs.kurrentdb.client)
 
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotest.runner)

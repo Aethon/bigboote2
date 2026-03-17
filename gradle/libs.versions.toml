@@ -27,6 +27,7 @@ ktor-server-sse          = { module = "io.ktor:ktor-server-sse",               v
 ktor-server-content-neg  = { module = "io.ktor:ktor-server-content-negotiation",version.ref = "ktor" }
 ktor-server-auth         = { module = "io.ktor:ktor-server-auth",              version.ref = "ktor" }
 ktor-server-auth-jwt     = { module = "io.ktor:ktor-server-auth-jwt",          version.ref = "ktor" }
+ktor-server-status-pages = { module = "io.ktor:ktor-server-status-pages",      version.ref = "ktor" }
 ktor-server-test-host    = { module = "io.ktor:ktor-server-test-host",         version.ref = "ktor" }
 
 # Ktor client
