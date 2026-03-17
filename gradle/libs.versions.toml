@@ -8,6 +8,7 @@ kurrentdb           = "5.4.1"
 kotlinx-coroutines  = "1.10.2"
 kotlinx-serialization = "1.9.0"
 arrow               = "1.2.4"
+kotlinx-datetime    = "0.6.2"
 logback             = "1.5.12"
 kotest              = "5.9.1"
 mockk               = "1.13.13"
@@ -57,6 +58,9 @@ kurrentdb-client         = { module = "com.eventstore:db-client-java",         v
 
 # Arrow
 arrow-core               = { module = "io.arrow-kt:arrow-core",                version.ref = "arrow" }
+
+# DateTime
+kotlinx-datetime         = { module = "org.jetbrains.kotlinx:kotlinx-datetime",  version.ref = "kotlinx-datetime" }
 
 # NanoID
 jnanoid                  = { module = "com.aventrix.jnanoid:jnanoid",           version.ref = "jnanoid" }
