@@ -1,9 +1,12 @@
 package com.bigboote.coordinator.koin
 
 import com.bigboote.coordinator.aggregates.AggregateRepository
+import com.bigboote.coordinator.aggregates.agenttype.AgentTypeCommandHandler
 import com.bigboote.coordinator.aggregates.effort.EffortCommandHandler
+import com.bigboote.coordinator.projections.AgentTypeSummaryProjection
 import com.bigboote.coordinator.projections.EffortSummaryProjection
 import com.bigboote.coordinator.projections.ProjectionRunner
+import com.bigboote.coordinator.projections.repositories.AgentTypeReadRepository
 import com.bigboote.coordinator.projections.repositories.EffortReadRepository
 import kotlinx.datetime.Clock
 import org.koin.dsl.module
@@ -36,7 +39,7 @@ val AuthModule = module {
 val DomainModule = module {
     // Clock.System passed per Architecture doc Section 13.1 for testability.
     single { EffortCommandHandler(get(), Clock.System) }
-    // Phase 6:  AgentTypeCommandHandler
+    single { AgentTypeCommandHandler(get(), Clock.System) }
     // Phase 11: ConversationCommandHandler
     // Phase 14: DocumentCommandHandler
     // Phase 15: SystemCollaborator
@@ -45,8 +48,9 @@ val DomainModule = module {
 val ProjectionModule = module {
     single { EffortSummaryProjection(get()) }
     single { EffortReadRepository() }
-    single { ProjectionRunner(get()) }
-    // Phase 6+:  AgentInstanceStatusProjection, AgentInstanceReadRepository
+    single { AgentTypeSummaryProjection(get()) }
+    single { AgentTypeReadRepository() }
+    single { ProjectionRunner(get(), get()) }
     // Phase 11+: ConversationProjection, ConversationReadRepository
     // Phase 14+: DocumentListProjection, DocumentReadRepository
 }

@@ -50,7 +50,7 @@ class EffortRoutesTest : DescribeSpec({
     // CollaboratorName.Individual takes a bare name (no @ prefix); toString() adds "@".
     val humanLead = CollaboratorSpec(
         name = CollaboratorName.Individual("lead-dev"),
-        type = CollaboratorType.HUMAN,
+        type = CollaboratorType.EXTERNAL,
         agentTypeId = null,
         isLead = true,
     )
