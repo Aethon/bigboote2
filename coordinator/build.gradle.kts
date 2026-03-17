@@ -45,3 +45,10 @@ dependencies {
     testImplementation(libs.testcontainers.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 }
+
+tasks {
+    named("distZip") { dependsOn("shadowJar") }
+    named("distTar") { dependsOn("shadowJar") }
+    named("startScripts") { dependsOn("shadowJar") }
+    named("startShadowScripts") { dependsOn("jar") }
+}
