@@ -83,8 +83,6 @@
 import { ref, reactive } from 'vue'
 import type { CollaboratorSpec, CreateEffortRequest } from '@/api/efforts'
 
-defineEmits<{ close: []; created: [effortId: string] }>()
-
 const emit = defineEmits<{ close: []; created: [effortId: string] }>()
 
 const props = defineProps<{

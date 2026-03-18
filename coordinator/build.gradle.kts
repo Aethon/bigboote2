@@ -50,6 +50,7 @@ dependencies {
     implementation(libs.aws.sdk.java.s3)
 
     testImplementation(libs.ktor.server.test.host)
+    testImplementation(libs.ktor.client.mock)
     testImplementation(libs.kotest.runner)
     testImplementation(libs.kotest.assertions)
     testImplementation(libs.koin.test)
