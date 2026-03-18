@@ -25,7 +25,7 @@ class EffortSummaryProjectionTest : DescribeSpec({
 
     fun makeProjection(): Pair<EffortSummaryProjection, EventStore> {
         val eventStore = mockk<EventStore>()
-        val projection = EffortSummaryProjection(eventStore)
+        val projection = EffortSummaryProjectionImpl(eventStore)
         return projection to eventStore
     }
 

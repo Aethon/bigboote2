@@ -25,8 +25,6 @@ import io.mockk.coEvery
 import io.mockk.coJustRun
 import io.mockk.mockk
 import kotlinx.datetime.Clock
-import org.koin.core.context.startKoin
-import org.koin.core.context.stopKoin
 import org.koin.dsl.module
 
 /**
@@ -83,7 +81,7 @@ class AgentTypeRoutesTest : DescribeSpec({
         }
     """.trimIndent()
 
-    // ---- mocks + Koin lifecycle ----
+    // ---- mocks ----
 
     lateinit var commandHandler: AgentTypeCommandHandler
     lateinit var projection: AgentTypeSummaryProjection
@@ -93,23 +91,21 @@ class AgentTypeRoutesTest : DescribeSpec({
         commandHandler = mockk()
         projection = mockk(relaxed = true)  // trackAgentType is a side-effect we don't assert here
         readRepo = mockk()
-
-        try { stopKoin() } catch (_: Exception) { }
-        startKoin {
-            modules(module {
-                single { commandHandler }
-                single { projection }
-                single { readRepo }
-                // Phase 7: auth stubs — required because configureServer() installs auth
-                single<BearerTokenValidator> { StubBearerTokenValidator() }
-                single { TokenStore() }
-                single { GatewayTokenValidator(get()) }
-            })
-        }
     }
 
-    afterEach {
-        try { stopKoin() } catch (_: Exception) { }
+    // Build a per-test Koin module from the current mocks.
+    // Called inside each testApplication block — by then beforeEach has already
+    // populated the lateinit vars, so the closures capture live references.
+    // koin-ktor 4.x creates a fresh isolated application context per testApplication,
+    // so no startKoin/stopKoin lifecycle management is needed.
+    fun testModule() = module {
+        single { commandHandler }
+        single { projection }
+        single { readRepo }
+        // Phase 7: auth stubs — required because configureServer() installs auth
+        single<BearerTokenValidator> { StubBearerTokenValidator() }
+        single { TokenStore() }
+        single { GatewayTokenValidator(get()) }
     }
 
     // ---- POST /api/v1/agent-types/create ----
@@ -120,7 +116,7 @@ class AgentTypeRoutesTest : DescribeSpec({
             coEvery { commandHandler.handle(any<com.bigboote.domain.commands.AgentTypeCommand.CreateAgentType>()) } returns agentTypeId
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
@@ -138,7 +134,7 @@ class AgentTypeRoutesTest : DescribeSpec({
             coEvery { commandHandler.handle(any<com.bigboote.domain.commands.AgentTypeCommand.CreateAgentType>()) } returns agentTypeId
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
@@ -163,7 +159,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
         it("returns 400 when id is blank") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
@@ -177,7 +173,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
         it("returns 400 when name is blank") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
@@ -191,7 +187,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
         it("returns 400 when model is blank") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
@@ -205,7 +201,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
         it("returns 400 when systemPrompt is blank") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
@@ -219,7 +215,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
         it("returns 400 when maxTokens is zero or negative") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
@@ -233,7 +229,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
         it("returns 400 when temperature is out of range") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
@@ -247,7 +243,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
         it("returns 400 when dockerImage is blank") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
@@ -261,7 +257,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
         it("returns 400 when spawnStrategy is blank") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
@@ -277,7 +273,7 @@ class AgentTypeRoutesTest : DescribeSpec({
             coEvery { commandHandler.handle(any<com.bigboote.domain.commands.AgentTypeCommand.CreateAgentType>()) } returns agentTypeId
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/create") {
                     contentType(ContentType.Application.Json)
@@ -300,7 +296,7 @@ class AgentTypeRoutesTest : DescribeSpec({
             coEvery { readRepo.list() } returns emptyList()
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get("/api/v1/agent-types")
 
@@ -313,7 +309,7 @@ class AgentTypeRoutesTest : DescribeSpec({
             coEvery { readRepo.list() } returns listOf(sampleRow)
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get("/api/v1/agent-types")
 
@@ -337,7 +333,7 @@ class AgentTypeRoutesTest : DescribeSpec({
             coEvery { readRepo.get(agentTypeId) } returns sampleRow
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get("/api/v1/agent-types/${agentTypeId.value}")
 
@@ -356,7 +352,7 @@ class AgentTypeRoutesTest : DescribeSpec({
             coEvery { readRepo.get(agentTypeId) } returns null
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get("/api/v1/agent-types/${agentTypeId.value}")
 
@@ -366,7 +362,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
         it("returns 400 when agentTypeId path param lacks the agenttype: prefix") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get("/api/v1/agent-types/not-a-valid-id")
 
@@ -385,7 +381,7 @@ class AgentTypeRoutesTest : DescribeSpec({
             coJustRun { commandHandler.handle(any<com.bigboote.domain.commands.AgentTypeCommand.UpdateAgentType>()) }
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/${agentTypeId.value}/update") {
                     contentType(ContentType.Application.Json)
@@ -403,7 +399,7 @@ class AgentTypeRoutesTest : DescribeSpec({
             coJustRun { commandHandler.handle(any<com.bigboote.domain.commands.AgentTypeCommand.UpdateAgentType>()) }
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/${agentTypeId.value}/update") {
                     contentType(ContentType.Application.Json)
@@ -418,7 +414,7 @@ class AgentTypeRoutesTest : DescribeSpec({
             coJustRun { commandHandler.handle(any<com.bigboote.domain.commands.AgentTypeCommand.UpdateAgentType>()) }
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/${agentTypeId.value}/update") {
                     contentType(ContentType.Application.Json)
@@ -435,7 +431,7 @@ class AgentTypeRoutesTest : DescribeSpec({
             } throws DomainException(DomainError.AgentTypeNotFound(agentTypeId))
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/${agentTypeId.value}/update") {
                     contentType(ContentType.Application.Json)
@@ -448,7 +444,7 @@ class AgentTypeRoutesTest : DescribeSpec({
 
         it("returns 400 when agentTypeId path param is invalid") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/agent-types/invalid-id/update") {
                     contentType(ContentType.Application.Json)

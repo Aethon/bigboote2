@@ -22,9 +22,27 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
-private val logger = LoggerFactory.getLogger(EffortSummaryProjection::class.java)
+private val logger = LoggerFactory.getLogger(EffortSummaryProjectionImpl::class.java)
 
 /**
+ * Public surface of the effort read model projection consumed by route handlers.
+ *
+ * Extracted as an interface so that route-layer tests can mock it without
+ * needing `open` or a real DB/EventStore. The sole production implementation
+ * is [EffortSummaryProjectionImpl].
+ *
+ * See Architecture doc Section 8.2.
+ */
+interface EffortSummaryProjection : Projection {
+    /** Begin tracking a newly created effort stream (called from route handlers). */
+    fun trackEffort(effortId: EffortId)
+    /** Synchronously project one event for immediate read-your-writes consistency. */
+    suspend fun project(event: EffortEvent)
+}
+
+/**
+ * Production implementation of [EffortSummaryProjection].
+ *
  * Maintains the `efforts` Postgres read model from KurrentDB effort events.
  *
  * Two delivery paths are used for correctness:
@@ -37,9 +55,9 @@ private val logger = LoggerFactory.getLogger(EffortSummaryProjection::class.java
  *
  * See Architecture doc Section 8.2.
  */
-class EffortSummaryProjection(
+class EffortSummaryProjectionImpl(
     private val eventStore: EventStore,
-) : Projection {
+) : EffortSummaryProjection {
 
     override val name = "effort-summary"
     override val streamPattern = "/effort:*"
@@ -83,7 +101,7 @@ class EffortSummaryProjection(
      * Idempotent: calling twice for the same effort has no effect.
      * Called by API routes immediately after a new Effort is created.
      */
-    fun trackEffort(effortId: EffortId) {
+    override fun trackEffort(effortId: EffortId) {
         val streamId = StreamNames.effort(effortId)
         if (!subscriptions.containsKey(streamId)) {
             subscribeToStream(effortId)
@@ -95,7 +113,7 @@ class EffortSummaryProjection(
      * Called from API routes for immediate read-your-writes consistency.
      * Also called internally by the subscription handler.
      */
-    suspend fun project(event: EffortEvent) {
+    override suspend fun project(event: EffortEvent) {
         when (event) {
             is EffortCreated -> upsertCreated(event)
             is EffortStarted -> updateStatus(event.effortId, EffortStatus.ACTIVE, startedAt = event.occurredAt)

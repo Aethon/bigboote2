@@ -14,17 +14,33 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.selectAll
 import org.slf4j.LoggerFactory
 
-private val logger = LoggerFactory.getLogger(ConversationReadRepository::class.java)
+private val logger = LoggerFactory.getLogger(ConversationReadRepositoryImpl::class.java)
 
 /**
  * Read-only query interface for the `conversations` and `messages` Postgres tables.
+ *
+ * Extracted as an interface so that route-layer tests can mock it without
+ * needing a real Postgres connection. The sole production implementation
+ * is [ConversationReadRepositoryImpl].
+ *
+ * See Architecture doc Section 8 and API Design doc Section 3.4.
+ */
+interface ConversationReadRepository {
+    suspend fun list(effortId: EffortId): List<ConversationRow>
+    suspend fun get(effortId: EffortId, convId: String): ConversationRow?
+    suspend fun getMessages(effortId: EffortId, convId: String, from: Int = 0, limit: Int = 50): List<MessageRow>
+    suspend fun getMembersForConv(effortId: EffortId, convId: String): List<CollaboratorName>
+}
+
+/**
+ * Production implementation of [ConversationReadRepository].
  *
  * Returns denormalised read models populated by [ConversationProjection].
  * Never reads from KurrentDB — all queries go to the Postgres read model.
  *
  * See Architecture doc Section 8 and API Design doc Section 3.4.
  */
-class ConversationReadRepository {
+class ConversationReadRepositoryImpl : ConversationReadRepository {
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -34,7 +50,7 @@ class ConversationReadRepository {
      * List all conversations for a given [effortId].
      * Returns conversation summaries ordered by [ConversationTable.createdAt] ascending.
      */
-    suspend fun list(effortId: EffortId): List<ConversationRow> = dbQuery {
+    override suspend fun list(effortId: EffortId): List<ConversationRow> = dbQuery {
         ConversationTable
             .selectAll()
             .where { ConversationTable.effortId eq effortId.value }
@@ -45,7 +61,7 @@ class ConversationReadRepository {
     /**
      * Get a single conversation by [effortId] and [convId]. Returns null if not found.
      */
-    suspend fun get(effortId: EffortId, convId: String): ConversationRow? = dbQuery {
+    override suspend fun get(effortId: EffortId, convId: String): ConversationRow? = dbQuery {
         ConversationTable
             .selectAll()
             .where {
@@ -66,11 +82,11 @@ class ConversationReadRepository {
      * @param from      zero-based offset for pagination (default 0)
      * @param limit     maximum number of messages to return (default 50, max 200)
      */
-    suspend fun getMessages(
+    override suspend fun getMessages(
         effortId: EffortId,
         convId: String,
-        from: Int = 0,
-        limit: Int = 50,
+        from: Int,
+        limit: Int
     ): List<MessageRow> = dbQuery {
         val clampedLimit = limit.coerceIn(1, 200)
         MessageTable
@@ -92,7 +108,7 @@ class ConversationReadRepository {
      * Returns an empty list if the conversation is not yet in the read model
      * (projection lag); the reactor will simply deliver to no-one in that case.
      */
-    suspend fun getMembersForConv(effortId: EffortId, convId: String): List<CollaboratorName> = dbQuery {
+    override suspend fun getMembersForConv(effortId: EffortId, convId: String): List<CollaboratorName> = dbQuery {
         ConversationTable
             .selectAll()
             .where {

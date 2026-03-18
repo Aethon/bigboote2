@@ -13,17 +13,31 @@ import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.selectAll
 import org.slf4j.LoggerFactory
 
-private val logger = LoggerFactory.getLogger(EffortReadRepository::class.java)
+private val logger = LoggerFactory.getLogger(EffortReadRepositoryImpl::class.java)
 
 /**
  * Read-only query interface for the `efforts` Postgres table.
+ *
+ * Extracted as an interface so that route-layer tests can mock it without
+ * needing a real Postgres connection. The sole production implementation
+ * is [EffortReadRepositoryImpl].
+ *
+ * See Architecture doc Section 8.
+ */
+interface EffortReadRepository {
+    suspend fun list(status: EffortStatus? = null): List<EffortRow>
+    suspend fun get(effortId: EffortId): EffortRow?
+}
+
+/**
+ * Production implementation of [EffortReadRepository].
  *
  * Returns denormalised read models populated by [EffortSummaryProjection].
  * Never reads from KurrentDB — all queries go to the Postgres read model.
  *
  * See Architecture doc Section 8.
  */
-class EffortReadRepository {
+class EffortReadRepositoryImpl : EffortReadRepository {
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -32,7 +46,7 @@ class EffortReadRepository {
     /**
      * List all Efforts, optionally filtered by [status].
      */
-    suspend fun list(status: EffortStatus? = null): List<EffortRow> = dbQuery {
+    override suspend fun list(status: EffortStatus?): List<EffortRow> = dbQuery {
         val query = EffortTable.selectAll()
         if (status != null) {
             query.andWhere { EffortTable.status eq status }
@@ -43,7 +57,7 @@ class EffortReadRepository {
     /**
      * Get a single Effort by ID. Returns null if not found.
      */
-    suspend fun get(effortId: EffortId): EffortRow? = dbQuery {
+    override suspend fun get(effortId: EffortId): EffortRow? = dbQuery {
         EffortTable
             .selectAll()
             .where { EffortTable.effortId eq effortId.value }

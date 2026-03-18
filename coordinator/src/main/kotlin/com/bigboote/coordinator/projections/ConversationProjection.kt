@@ -21,9 +21,27 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
-private val logger = LoggerFactory.getLogger(ConversationProjection::class.java)
+private val logger = LoggerFactory.getLogger(ConversationProjectionImpl::class.java)
 
 /**
+ * Public surface of the conversation read model projection consumed by route handlers.
+ *
+ * Extracted as an interface so that route-layer tests can mock it without
+ * needing `open` or a real DB/EventStore. The sole production implementation
+ * is [ConversationProjectionImpl].
+ *
+ * See Architecture doc Section 8.2.
+ */
+interface ConversationProjection : Projection {
+    /** Begin tracking a newly created conversation stream (called from route handlers). */
+    fun trackConversation(effortId: EffortId, convId: ConvId)
+    /** Synchronously project one event for immediate read-your-writes consistency. */
+    suspend fun project(event: ConversationEvent)
+}
+
+/**
+ * Production implementation of [ConversationProjection].
+ *
  * Maintains the `conversations` and `messages` Postgres read models from KurrentDB
  * conversation events.
  *
@@ -36,9 +54,9 @@ private val logger = LoggerFactory.getLogger(ConversationProjection::class.java)
  *
  * See Architecture doc Section 8.2.
  */
-class ConversationProjection(
+class ConversationProjectionImpl(
     private val eventStore: EventStore,
-) : Projection {
+) : ConversationProjection {
 
     override val name = "conversation-summary"
     override val streamPattern = "/effort:*/conv:*"
@@ -86,7 +104,7 @@ class ConversationProjection(
      * Idempotent: calling twice for the same stream has no effect.
      * Called by API routes immediately after a new conversation is created.
      */
-    fun trackConversation(effortId: EffortId, convId: ConvId) {
+    override fun trackConversation(effortId: EffortId, convId: ConvId) {
         val streamId = StreamNames.conversation(effortId, convId)
         if (!subscriptions.containsKey(streamId)) {
             subscribeToStream(effortId, convId)
@@ -98,7 +116,7 @@ class ConversationProjection(
      * Called from API routes for immediate read-your-writes consistency.
      * Also called internally by the subscription handler.
      */
-    suspend fun project(event: ConversationEvent) {
+    override suspend fun project(event: ConversationEvent) {
         when (event) {
             is ConversationCreated -> upsertConversation(event)
             is MemberAdded        -> addMember(event)

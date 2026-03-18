@@ -15,25 +15,40 @@ import kotlinx.datetime.Clock
 import org.slf4j.LoggerFactory
 import java.util.UUID
 
-private val logger = LoggerFactory.getLogger("com.bigboote.coordinator.aggregates.effort.EffortCommandHandler")
+private val logger = LoggerFactory.getLogger("com.bigboote.coordinator.aggregates.effort.EffortCommandHandlerImpl")
 
 /**
- * Handles all Effort aggregate commands by loading state from the event store,
- * validating the command against current state, producing events, and appending
- * them to the effort stream.
+ * Handles all Effort aggregate commands.
+ *
+ * Extracted so that tests can mock it without requiring the `open` modifier.
+ * The sole production implementation is [EffortCommandHandlerImpl].
  *
  * See Architecture doc Section 6.2.
  */
-class EffortCommandHandler(
+interface EffortCommandHandler {
+    suspend fun handle(cmd: CreateEffort): EffortId
+    suspend fun handle(cmd: StartEffort)
+    suspend fun handle(cmd: PauseEffort)
+    suspend fun handle(cmd: ResumeEffort)
+    suspend fun handle(cmd: CloseEffort)
+}
+
+/**
+ * Production implementation of [EffortCommandHandler].
+ * Loads state from the event store, validates the command, and appends events.
+ *
+ * See Architecture doc Section 6.2.
+ */
+class EffortCommandHandlerImpl(
     private val repo: AggregateRepository,
     private val clock: Clock,
-) {
+) : EffortCommandHandler {
 
     /**
      * Create a new Effort. Emits [EffortCreated] on a new stream.
      * Returns the generated EffortId.
      */
-    suspend fun handle(cmd: CreateEffort): EffortId {
+    override suspend fun handle(cmd: CreateEffort): EffortId {
         val event = EffortCreated(
             effortId = cmd.effortId,
             name = cmd.name,
@@ -57,7 +72,7 @@ class EffortCommandHandler(
      * Start an Effort. Emits [EffortStarted] plus [AgentSpawnRequested] for
      * each AGENT collaborator. Effort must be in CREATED status.
      */
-    suspend fun handle(cmd: StartEffort) {
+    override suspend fun handle(cmd: StartEffort) {
         val (state, version) = loadEffort(cmd.effortId)
 
         requireTransition(state, EffortStatus.CREATED, EffortStatus.ACTIVE)
@@ -98,7 +113,7 @@ class EffortCommandHandler(
     /**
      * Pause an active Effort. Emits [EffortPaused].
      */
-    suspend fun handle(cmd: PauseEffort) {
+    override suspend fun handle(cmd: PauseEffort) {
         val (state, version) = loadEffort(cmd.effortId)
 
         requireTransition(state, EffortStatus.ACTIVE, EffortStatus.PAUSED)
@@ -115,7 +130,7 @@ class EffortCommandHandler(
     /**
      * Resume a paused Effort. Emits [EffortResumed].
      */
-    suspend fun handle(cmd: ResumeEffort) {
+    override suspend fun handle(cmd: ResumeEffort) {
         val (state, version) = loadEffort(cmd.effortId)
 
         requireTransition(state, EffortStatus.PAUSED, EffortStatus.ACTIVE)
@@ -132,7 +147,7 @@ class EffortCommandHandler(
     /**
      * Close an Effort. Emits [EffortClosed]. Can close from ACTIVE or PAUSED.
      */
-    suspend fun handle(cmd: CloseEffort) {
+    override suspend fun handle(cmd: CloseEffort) {
         val (state, version) = loadEffort(cmd.effortId)
 
         if (state.status == EffortStatus.CLOSED) {

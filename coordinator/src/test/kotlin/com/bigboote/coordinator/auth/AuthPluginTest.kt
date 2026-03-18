@@ -15,8 +15,6 @@ import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import io.mockk.mockk
-import org.koin.core.context.startKoin
-import org.koin.core.context.stopKoin
 import org.koin.dsl.module
 
 /**
@@ -46,27 +44,23 @@ class AuthPluginTest : DescribeSpec({
             gatewayToken = knownGatewayToken,
             agentToken   = "at-unused-in-phase-7",
         )
-
-        try { stopKoin() } catch (_: Exception) { }
-        startKoin {
-            modules(module {
-                // Domain / projection stubs — not exercised by auth tests
-                single { mockk<EffortCommandHandler>(relaxed = true) }
-                single { mockk<AgentTypeCommandHandler>(relaxed = true) }
-                single { mockk<EffortSummaryProjection>(relaxed = true) }
-                single { mockk<EffortReadRepository>(relaxed = true) }
-                single { mockk<AgentTypeSummaryProjection>(relaxed = true) }
-                single { mockk<AgentTypeReadRepository>(relaxed = true) }
-                // Auth beans — use the real tokenStore so gateway token tests work
-                single<BearerTokenValidator> { StubBearerTokenValidator() }
-                single { tokenStore }
-                single { GatewayTokenValidator(get()) }
-            })
-        }
     }
 
-    afterEach {
-        try { stopKoin() } catch (_: Exception) { }
+    // Build a per-test Koin module.
+    // koin-ktor 4.x creates a fresh isolated application context per testApplication,
+    // so no startKoin/stopKoin lifecycle management is needed.
+    fun testModule() = module {
+        // Domain / projection stubs — not exercised by auth tests
+        single { mockk<EffortCommandHandler>(relaxed = true) }
+        single { mockk<AgentTypeCommandHandler>(relaxed = true) }
+        single { mockk<EffortSummaryProjection>(relaxed = true) }
+        single { mockk<EffortReadRepository>(relaxed = true) }
+        single { mockk<AgentTypeSummaryProjection>(relaxed = true) }
+        single { mockk<AgentTypeReadRepository>(relaxed = true) }
+        // Auth beans — use the real tokenStore so gateway token tests work
+        single<BearerTokenValidator> { StubBearerTokenValidator() }
+        single { tokenStore }
+        single { GatewayTokenValidator(get()) }
     }
 
     // ------------------------------------------------------------------ /health
@@ -75,7 +69,7 @@ class AuthPluginTest : DescribeSpec({
 
         it("returns 200 without any auth header") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val response = client.get("/health")
                 response.status shouldBe HttpStatusCode.OK
             }
@@ -88,7 +82,7 @@ class AuthPluginTest : DescribeSpec({
 
         it("returns 401 when Authorization header is absent") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 // Use the default unauthenticated client (no Authorization header)
                 val response = client.get("/api/v1/efforts")
                 response.status shouldBe HttpStatusCode.Unauthorized
@@ -97,7 +91,7 @@ class AuthPluginTest : DescribeSpec({
 
         it("returns 401 when Authorization header is present but not Bearer scheme") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val response = client.get("/api/v1/efforts") {
                     headers { append(HttpHeaders.Authorization, "Basic dXNlcjpwYXNz") }
                 }
@@ -107,7 +101,7 @@ class AuthPluginTest : DescribeSpec({
 
         it("returns 401 when Bearer token is empty string") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val response = client.get("/api/v1/efforts") {
                     headers { append(HttpHeaders.Authorization, "Bearer ") }
                 }
@@ -118,7 +112,7 @@ class AuthPluginTest : DescribeSpec({
 
         it("returns non-401 when any non-blank Bearer token is provided") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val response = client.get("/api/v1/efforts") {
                     headers { append(HttpHeaders.Authorization, "Bearer any-token-passes-stub") }
                 }
@@ -131,7 +125,7 @@ class AuthPluginTest : DescribeSpec({
 
         it("returns non-401 for a UUID-format Bearer token") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val response = client.get("/api/v1/efforts") {
                     headers { append(HttpHeaders.Authorization, "Bearer a1b2c3d4-e5f6-7890-abcd-ef1234567890") }
                 }
@@ -147,7 +141,7 @@ class AuthPluginTest : DescribeSpec({
 
         it("returns 401 when X-Gateway-Token header is absent") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val response = client.get("/internal/v1/anything")
                 response.status shouldBe HttpStatusCode.Unauthorized
             }
@@ -155,7 +149,7 @@ class AuthPluginTest : DescribeSpec({
 
         it("returns 401 when X-Gateway-Token is an unknown value") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val response = client.get("/internal/v1/anything") {
                     headers { append("X-Gateway-Token", "unknown-random-token") }
                 }
@@ -165,7 +159,7 @@ class AuthPluginTest : DescribeSpec({
 
         it("passes auth (non-401) when X-Gateway-Token is a registered token") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val response = client.get("/internal/v1/anything") {
                     headers { append("X-Gateway-Token", knownGatewayToken) }
                 }
