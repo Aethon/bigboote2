@@ -18,7 +18,7 @@ import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
-import io.ktor.client.plugins.defaultrequest.*
+import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -27,8 +27,6 @@ import io.mockk.coEvery
 import io.mockk.coJustRun
 import io.mockk.mockk
 import kotlinx.datetime.Clock
-import org.koin.core.context.startKoin
-import org.koin.core.context.stopKoin
 import org.koin.dsl.module
 
 /**
@@ -39,7 +37,7 @@ import org.koin.dsl.module
  * EffortReadRepository) are replaced with MockK stubs so that no KurrentDB or
  * Postgres connection is required.
  *
- * Phase 7 addition: all requests to /api/v1/* require
+ * Phase 7 addition: all requests to /api/v1/{*} require
  * `Authorization: Bearer <token>`. [authenticatedClient] provides a default
  * test client pre-configured with a stub bearer token. Auth beans
  * (BearerTokenValidator, TokenStore, GatewayTokenValidator) are registered in
@@ -78,7 +76,7 @@ class EffortRoutesTest : DescribeSpec({
         closedAt = null,
     )
 
-    // ---- mocks + Koin lifecycle ----
+    // ---- mocks ----
 
     lateinit var commandHandler: EffortCommandHandler
     lateinit var projection: EffortSummaryProjection
@@ -88,23 +86,19 @@ class EffortRoutesTest : DescribeSpec({
         commandHandler = mockk()
         projection = mockk(relaxed = true)   // trackEffort/stop are side-effects we don't assert here
         readRepo = mockk()
-
-        try { stopKoin() } catch (_: Exception) { }
-        startKoin {
-            modules(module {
-                single { commandHandler }
-                single { projection }
-                single { readRepo }
-                // Phase 7: auth stubs — required because configureServer() installs auth
-                single<BearerTokenValidator> { StubBearerTokenValidator() }
-                single { TokenStore() }
-                single { GatewayTokenValidator(get()) }
-            })
-        }
     }
 
-    afterEach {
-        try { stopKoin() } catch (_: Exception) { }
+    // Build a per-test Koin module from the current mocks.
+    // koin-ktor 4.x creates a fresh isolated application context per testApplication,
+    // so no startKoin/stopKoin lifecycle management is needed.
+    fun testModule() = module {
+        single { commandHandler }
+        single { projection }
+        single { readRepo }
+        // Phase 7: auth stubs — required because configureServer() installs auth
+        single<BearerTokenValidator> { StubBearerTokenValidator() }
+        single { TokenStore() }
+        single { GatewayTokenValidator(get()) }
     }
 
     // ---- POST /api/v1/efforts/create ----
@@ -115,7 +109,7 @@ class EffortRoutesTest : DescribeSpec({
             coEvery { commandHandler.handle(any<CreateEffort>()) } returns effortId
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
@@ -144,7 +138,7 @@ class EffortRoutesTest : DescribeSpec({
             coEvery { commandHandler.handle(any<CreateEffort>()) } returns effortId
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
@@ -168,7 +162,7 @@ class EffortRoutesTest : DescribeSpec({
 
         it("returns 400 when name is blank") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
@@ -190,7 +184,7 @@ class EffortRoutesTest : DescribeSpec({
 
         it("returns 400 when goal is blank") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
@@ -212,7 +206,7 @@ class EffortRoutesTest : DescribeSpec({
 
         it("returns 400 when collaborators list is empty") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
@@ -233,7 +227,7 @@ class EffortRoutesTest : DescribeSpec({
 
         it("returns 400 when no collaborator has isLead=true") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
@@ -257,7 +251,7 @@ class EffortRoutesTest : DescribeSpec({
 
         it("returns 400 when more than one collaborator has isLead=true") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
@@ -282,7 +276,7 @@ class EffortRoutesTest : DescribeSpec({
 
         it("returns 400 when AGENT collaborator is missing agentTypeId") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/create") {
                     contentType(ContentType.Application.Json)
@@ -313,7 +307,7 @@ class EffortRoutesTest : DescribeSpec({
             coEvery { readRepo.list(null) } returns emptyList()
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts")
 
@@ -326,7 +320,7 @@ class EffortRoutesTest : DescribeSpec({
             coEvery { readRepo.list(null) } returns listOf(sampleRow)
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts")
 
@@ -342,7 +336,7 @@ class EffortRoutesTest : DescribeSpec({
             coEvery { readRepo.list(EffortStatus.ACTIVE) } returns emptyList()
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts?status=active")
 
@@ -352,7 +346,7 @@ class EffortRoutesTest : DescribeSpec({
 
         it("returns 400 for an unrecognised status parameter") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts?status=bogus")
 
@@ -370,7 +364,7 @@ class EffortRoutesTest : DescribeSpec({
             coEvery { readRepo.get(effortId) } returns sampleRow
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts/${effortId.value}")
 
@@ -389,7 +383,7 @@ class EffortRoutesTest : DescribeSpec({
             coEvery { readRepo.get(effortId) } returns null
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts/${effortId.value}")
 
@@ -399,7 +393,7 @@ class EffortRoutesTest : DescribeSpec({
 
         it("returns 400 when effortId path param is invalid") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts/not-a-valid-id")
 
@@ -418,7 +412,7 @@ class EffortRoutesTest : DescribeSpec({
             coJustRun { commandHandler.handle(any<StartEffort>()) }
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/start")
 
@@ -434,7 +428,7 @@ class EffortRoutesTest : DescribeSpec({
                 DomainException(DomainError.InvalidEffortTransition(effortId, EffortStatus.ACTIVE, EffortStatus.ACTIVE))
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/start")
 
@@ -451,7 +445,7 @@ class EffortRoutesTest : DescribeSpec({
             coJustRun { commandHandler.handle(any<PauseEffort>()) }
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/pause")
 
@@ -469,7 +463,7 @@ class EffortRoutesTest : DescribeSpec({
             coJustRun { commandHandler.handle(any<ResumeEffort>()) }
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/resume")
 
@@ -487,7 +481,7 @@ class EffortRoutesTest : DescribeSpec({
             coJustRun { commandHandler.handle(any<CloseEffort>()) }
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/close")
 
@@ -501,7 +495,7 @@ class EffortRoutesTest : DescribeSpec({
                 DomainException(DomainError.EffortAlreadyClosed(effortId))
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/close")
 

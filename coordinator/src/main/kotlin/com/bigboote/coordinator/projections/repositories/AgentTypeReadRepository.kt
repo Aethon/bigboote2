@@ -10,7 +10,19 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.selectAll
 import org.slf4j.LoggerFactory
 
-private val logger = LoggerFactory.getLogger(AgentTypeReadRepository::class.java)
+private val logger = LoggerFactory.getLogger(AgentTypeReadRepositoryImpl::class.java)
+
+/**
+ * Contract for the AgentType read model repository.
+ * Extracted as an interface so that route-layer tests can mock it without
+ * requiring a live Postgres connection.
+ */
+interface AgentTypeReadRepository {
+    /** List all AgentTypes ordered by creation time ascending. */
+    suspend fun list(): List<AgentTypeRow>
+    /** Get a single AgentType by ID. Returns null if not found. */
+    suspend fun get(agentTypeId: AgentTypeId): AgentTypeRow?
+}
 
 /**
  * Read-only query interface for the `agent_types` Postgres table.
@@ -20,7 +32,7 @@ private val logger = LoggerFactory.getLogger(AgentTypeReadRepository::class.java
  *
  * See Architecture doc Section 8.
  */
-class AgentTypeReadRepository {
+class AgentTypeReadRepositoryImpl : AgentTypeReadRepository {
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -29,7 +41,7 @@ class AgentTypeReadRepository {
     /**
      * List all AgentTypes ordered by creation time ascending.
      */
-    suspend fun list(): List<AgentTypeRow> = dbQuery {
+    override suspend fun list(): List<AgentTypeRow> = dbQuery {
         AgentTypeTable
             .selectAll()
             .orderBy(AgentTypeTable.createdAt)
@@ -39,7 +51,7 @@ class AgentTypeReadRepository {
     /**
      * Get a single AgentType by ID. Returns null if not found.
      */
-    suspend fun get(agentTypeId: AgentTypeId): AgentTypeRow? = dbQuery {
+    override suspend fun get(agentTypeId: AgentTypeId): AgentTypeRow? = dbQuery {
         AgentTypeTable
             .selectAll()
             .where { AgentTypeTable.agentTypeId eq agentTypeId.value }

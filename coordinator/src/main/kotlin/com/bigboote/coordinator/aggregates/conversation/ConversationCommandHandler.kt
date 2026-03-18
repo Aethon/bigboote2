@@ -15,13 +15,25 @@ import kotlinx.datetime.Clock
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger(
-    "com.bigboote.coordinator.aggregates.conversation.ConversationCommandHandler"
+    "com.bigboote.coordinator.aggregates.conversation.ConversationCommandHandlerImpl"
 )
 
 /**
- * Handles all Conversation aggregate commands by loading state from the event store,
- * validating the command against current state, producing events, and appending them
- * to the conversation stream.
+ * Handles all Conversation aggregate commands.
+ *
+ * Extracted so that tests can mock it without requiring the `open` modifier.
+ * The sole production implementation is [ConversationCommandHandlerImpl].
+ *
+ * See Architecture doc Section 6.2 and API Design doc Section 3.4.
+ */
+interface ConversationCommandHandler {
+    suspend fun handle(cmd: CreateChannel)
+    suspend fun handle(cmd: PostMessage)
+    suspend fun handle(cmd: AddMember)
+}
+
+/**
+ * Production implementation of [ConversationCommandHandler].
  *
  * Supported commands:
  * - [CreateChannel]: create a named channel conversation. Emits [ConversationCreated].
@@ -33,16 +45,16 @@ private val logger = LoggerFactory.getLogger(
  *
  * See Architecture doc Section 6.2 and API Design doc Section 3.4.
  */
-class ConversationCommandHandler(
+class ConversationCommandHandlerImpl(
     private val repo: AggregateRepository,
     private val clock: Clock,
-) {
+) : ConversationCommandHandler {
 
     /**
      * Create a named channel conversation. The channel must not already exist on
      * this effort (NoStream guarantees idempotency on re-create attempts).
      */
-    suspend fun handle(cmd: CreateChannel) {
+    override suspend fun handle(cmd: CreateChannel) {
         val convId = cmd.convId
         if (convId !is ConvId.Channel) {
             throw ValidationException("CreateChannel requires a Channel ConvId, got: ${convId.value}")
@@ -78,7 +90,7 @@ class ConversationCommandHandler(
      * For Channel conversations in state EMPTY, throws [DomainError.ConversationNotFound]
      * (channels must be explicitly created via [CreateChannel]).
      */
-    suspend fun handle(cmd: PostMessage) {
+    override suspend fun handle(cmd: PostMessage) {
         val rawConvId = cmd.convId
             ?: throw ValidationException("PostMessage.convId must not be null")
 
@@ -158,7 +170,7 @@ class ConversationCommandHandler(
      * Add a member to an existing conversation. Throws if the conversation does not exist.
      * Throws if the member is already in the conversation (idempotency check).
      */
-    suspend fun handle(cmd: AddMember) {
+    override suspend fun handle(cmd: AddMember) {
         val convId: ConvId = try {
             ConvId.parse(cmd.convId)
         } catch (e: IllegalArgumentException) {

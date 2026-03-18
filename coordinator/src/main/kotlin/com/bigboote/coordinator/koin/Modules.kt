@@ -2,23 +2,32 @@ package com.bigboote.coordinator.koin
 
 import com.bigboote.coordinator.aggregates.AggregateRepository
 import com.bigboote.coordinator.aggregates.agenttype.AgentTypeCommandHandler
+import com.bigboote.coordinator.aggregates.agenttype.AgentTypeCommandHandlerImpl
 import com.bigboote.coordinator.aggregates.conversation.ConversationCommandHandler
+import com.bigboote.coordinator.aggregates.conversation.ConversationCommandHandlerImpl
 import com.bigboote.coordinator.aggregates.document.DocumentCommandHandler
 import com.bigboote.coordinator.aggregates.effort.EffortCommandHandler
+import com.bigboote.coordinator.aggregates.effort.EffortCommandHandlerImpl
 import com.bigboote.coordinator.auth.BearerTokenValidator
 import com.bigboote.coordinator.auth.GatewayTokenValidator
 import com.bigboote.coordinator.auth.StubBearerTokenValidator
 import com.bigboote.coordinator.auth.TokenGenerator
 import com.bigboote.coordinator.auth.TokenStore
 import com.bigboote.coordinator.projections.AgentTypeSummaryProjection
+import com.bigboote.coordinator.projections.AgentTypeSummaryProjectionImpl
 import com.bigboote.coordinator.projections.ConversationProjection
+import com.bigboote.coordinator.projections.ConversationProjectionImpl
 import com.bigboote.coordinator.projections.DocumentListProjection
 import com.bigboote.coordinator.projections.EffortSummaryProjection
+import com.bigboote.coordinator.projections.EffortSummaryProjectionImpl
 import com.bigboote.coordinator.projections.ProjectionRunner
 import com.bigboote.coordinator.projections.repositories.AgentTypeReadRepository
+import com.bigboote.coordinator.projections.repositories.AgentTypeReadRepositoryImpl
 import com.bigboote.coordinator.projections.repositories.ConversationReadRepository
+import com.bigboote.coordinator.projections.repositories.ConversationReadRepositoryImpl
 import com.bigboote.coordinator.projections.repositories.DocumentReadRepository
 import com.bigboote.coordinator.projections.repositories.EffortReadRepository
+import com.bigboote.coordinator.projections.repositories.EffortReadRepositoryImpl
 import com.bigboote.coordinator.messaging.NativeMessagingAdapter
 import com.bigboote.coordinator.messaging.SseEventBroadcaster
 import com.bigboote.coordinator.storage.AwsS3DocumentStorage
@@ -73,20 +82,20 @@ val AuthModule = module {
 
 val DomainModule = module {
     // Clock.System passed per Architecture doc Section 13.1 for testability.
-    single { EffortCommandHandler(get(), Clock.System) }
-    single { AgentTypeCommandHandler(get(), Clock.System) }
-    single { ConversationCommandHandler(get(), Clock.System) }  // Phase 11
+    single<EffortCommandHandler> { EffortCommandHandlerImpl(get(), Clock.System) }
+    single<AgentTypeCommandHandler> { AgentTypeCommandHandlerImpl(get(), Clock.System) }
+    single<ConversationCommandHandler> { ConversationCommandHandlerImpl(get(), Clock.System) }  // Phase 11
     single { DocumentCommandHandler(get(), Clock.System, get()) }  // Phase 14
     single { SystemCollaborator(get()) }                           // Phase 15
 }
 
 val ProjectionModule = module {
-    single { EffortSummaryProjection(get()) }
-    single { EffortReadRepository() }
-    single { AgentTypeSummaryProjection(get()) }
-    single { AgentTypeReadRepository() }
-    single { ConversationProjection(get()) }       // Phase 11
-    single { ConversationReadRepository() }        // Phase 11
+    single<EffortSummaryProjection> { EffortSummaryProjectionImpl(get()) }
+    single<EffortReadRepository> { EffortReadRepositoryImpl() }
+    single<AgentTypeSummaryProjection> { AgentTypeSummaryProjectionImpl(get()) }
+    single<AgentTypeReadRepository> { AgentTypeReadRepositoryImpl() }
+    single<ConversationProjection> { ConversationProjectionImpl(get()) }       // Phase 11
+    single<ConversationReadRepository> { ConversationReadRepositoryImpl() }    // Phase 11
     single { DocumentListProjection(get()) }       // Phase 14
     single { DocumentReadRepository() }            // Phase 14
     single { ProjectionRunner(get(), get(), get(), get()) }

@@ -16,7 +16,7 @@ import com.bigboote.domain.values.EffortId
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
-import io.ktor.client.plugins.defaultrequest.*
+import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -25,8 +25,6 @@ import io.mockk.coEvery
 import io.mockk.coJustRun
 import io.mockk.mockk
 import kotlinx.datetime.Clock
-import org.koin.core.context.startKoin
-import org.koin.core.context.stopKoin
 import org.koin.dsl.module
 
 /**
@@ -37,7 +35,7 @@ import org.koin.dsl.module
  * ConversationReadRepository) are replaced with MockK stubs so that no KurrentDB or
  * Postgres connection is required.
  *
- * All requests to /api/v1/* require `Authorization: Bearer <token>`.
+ * All requests to /api/v1/{*} require `Authorization: Bearer <token>`.
  * [authenticatedClient] provides a test client pre-configured with a stub bearer token.
  *
  * URL encoding note: The '#' character in channel ConvIds (e.g. "conv:#general") must
@@ -79,7 +77,7 @@ class ConversationRoutesTest : DescribeSpec({
         postedAt  = now,
     )
 
-    // ---- mocks + Koin lifecycle ----
+    // ---- mocks ----
 
     lateinit var commandHandler: ConversationCommandHandler
     lateinit var projection: ConversationProjection
@@ -89,32 +87,27 @@ class ConversationRoutesTest : DescribeSpec({
         commandHandler = mockk()
         projection     = mockk(relaxed = true)
         readRepo       = mockk()
-
-        try { stopKoin() } catch (_: Exception) { }
-        startKoin {
-            modules(module {
-                single { commandHandler }
-                single { projection }
-                single { readRepo }
-                // Effort / AgentType stubs — not exercised by conversation tests but
-                // Koin must be able to resolve them if an effort/agenttype route is
-                // accidentally triggered.
-                single { mockk<com.bigboote.coordinator.aggregates.effort.EffortCommandHandler>(relaxed = true) }
-                single { mockk<com.bigboote.coordinator.aggregates.agenttype.AgentTypeCommandHandler>(relaxed = true) }
-                single { mockk<com.bigboote.coordinator.projections.EffortSummaryProjection>(relaxed = true) }
-                single { mockk<com.bigboote.coordinator.projections.AgentTypeSummaryProjection>(relaxed = true) }
-                single { mockk<com.bigboote.coordinator.projections.repositories.EffortReadRepository>(relaxed = true) }
-                single { mockk<com.bigboote.coordinator.projections.repositories.AgentTypeReadRepository>(relaxed = true) }
-                // Auth beans — required because configureServer() installs auth
-                single<BearerTokenValidator> { StubBearerTokenValidator() }
-                single { TokenStore() }
-                single { GatewayTokenValidator(get()) }
-            })
-        }
     }
 
-    afterEach {
-        try { stopKoin() } catch (_: Exception) { }
+    // Build a per-test Koin module from the current mocks.
+    // koin-ktor 4.x creates a fresh isolated application context per testApplication,
+    // so no startKoin/stopKoin lifecycle management is needed.
+    fun testModule() = module {
+        single { commandHandler }
+        single { projection }
+        single { readRepo }
+        // Effort / AgentType stubs — not exercised by conversation tests but
+        // registered defensively in case a route handler resolves them eagerly.
+        single { mockk<com.bigboote.coordinator.aggregates.effort.EffortCommandHandler>(relaxed = true) }
+        single { mockk<com.bigboote.coordinator.aggregates.agenttype.AgentTypeCommandHandler>(relaxed = true) }
+        single { mockk<com.bigboote.coordinator.projections.EffortSummaryProjection>(relaxed = true) }
+        single { mockk<com.bigboote.coordinator.projections.AgentTypeSummaryProjection>(relaxed = true) }
+        single { mockk<com.bigboote.coordinator.projections.repositories.EffortReadRepository>(relaxed = true) }
+        single { mockk<com.bigboote.coordinator.projections.repositories.AgentTypeReadRepository>(relaxed = true) }
+        // Auth beans — required because configureServer() installs auth
+        single<BearerTokenValidator> { StubBearerTokenValidator() }
+        single { TokenStore() }
+        single { GatewayTokenValidator(get()) }
     }
 
     // ---- POST /api/v1/efforts/{effortId}/conversations/create-channel ----
@@ -132,7 +125,7 @@ class ConversationRoutesTest : DescribeSpec({
             coJustRun { commandHandler.handle(any<com.bigboote.domain.commands.ConversationCommand.CreateChannel>()) }
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/conversations/create-channel") {
                     contentType(ContentType.Application.Json)
@@ -151,7 +144,7 @@ class ConversationRoutesTest : DescribeSpec({
 
         it("returns 400 when name is blank") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/conversations/create-channel") {
                     contentType(ContentType.Application.Json)
@@ -165,7 +158,7 @@ class ConversationRoutesTest : DescribeSpec({
 
         it("returns 400 when members list is empty") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/conversations/create-channel") {
                     contentType(ContentType.Application.Json)
@@ -179,7 +172,7 @@ class ConversationRoutesTest : DescribeSpec({
 
         it("returns 400 when a member name lacks a prefix") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/${effortId.value}/conversations/create-channel") {
                     contentType(ContentType.Application.Json)
@@ -193,7 +186,7 @@ class ConversationRoutesTest : DescribeSpec({
 
         it("returns 400 when effortId path parameter is invalid") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post("/api/v1/efforts/not-an-effort-id/conversations/create-channel") {
                     contentType(ContentType.Application.Json)
@@ -214,7 +207,7 @@ class ConversationRoutesTest : DescribeSpec({
             coEvery { readRepo.list(effortId) } returns emptyList()
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts/${effortId.value}/conversations")
 
@@ -227,7 +220,7 @@ class ConversationRoutesTest : DescribeSpec({
             coEvery { readRepo.list(effortId) } returns listOf(sampleConversationRow)
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get("/api/v1/efforts/${effortId.value}/conversations")
 
@@ -252,7 +245,7 @@ class ConversationRoutesTest : DescribeSpec({
             coEvery { readRepo.getMessages(effortId, channelConvId, 0, 50) } returns listOf(sampleMessageRow)
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get(
                     "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/messages"
@@ -274,7 +267,7 @@ class ConversationRoutesTest : DescribeSpec({
             coEvery { readRepo.getMessages(effortId, channelConvId, 0, 50) } returns emptyList()
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get(
                     "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/messages"
@@ -289,7 +282,7 @@ class ConversationRoutesTest : DescribeSpec({
             coEvery { readRepo.get(effortId, channelConvId) } returns null
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get(
                     "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/messages"
@@ -304,7 +297,7 @@ class ConversationRoutesTest : DescribeSpec({
             coEvery { readRepo.getMessages(effortId, channelConvId, 10, 20) } returns emptyList()
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get(
                     "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/messages?from=10&limit=20"
@@ -328,7 +321,7 @@ class ConversationRoutesTest : DescribeSpec({
             coJustRun { commandHandler.handle(any<com.bigboote.domain.commands.ConversationCommand.AddMember>()) }
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post(
                     "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/members"
@@ -346,7 +339,7 @@ class ConversationRoutesTest : DescribeSpec({
 
         it("returns 400 when member is blank") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post(
                     "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/members"
@@ -362,7 +355,7 @@ class ConversationRoutesTest : DescribeSpec({
 
         it("returns 400 when member name lacks a prefix") {
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post(
                     "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/members"
@@ -382,7 +375,7 @@ class ConversationRoutesTest : DescribeSpec({
             } throws DomainException(DomainError.ConversationNotFound(channelConvId))
 
             testApplication {
-                application { configureServer() }
+                application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post(
                     "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/members"

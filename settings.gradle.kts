@@ -8,13 +8,14 @@ dependencyResolutionManagement {
     }
 }
 
-//plugins {
-//    // Use the Foojay Toolchains plugin to automatically download JDKs required by subprojects.
-//    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
-//}
+plugins {
+    // Use the Foojay Toolchains plugin to automatically download JDKs required by subprojects.
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
 
 include(":shared-domain")
 include(":shared-events")
 include(":shared-infra")
 include(":coordinator")
 include(":agent-service")
+include(":vue-ui")

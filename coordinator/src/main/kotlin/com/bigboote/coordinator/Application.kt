@@ -73,6 +73,9 @@ fun main() {
         logger.info("Shutdown complete")
     })
 
-    embeddedServer(Netty, port = 8080, module = Application::configureServer)
+    // Lambda form required so that configureServer() can receive the default koinModules
+    // list (COORDINATOR_KOIN_MODULES). The module = Application::configureServer form
+    // only works for zero-argument extension functions.
+    embeddedServer(Netty, port = 8080) { configureServer() }
         .start(wait = true)
 }
