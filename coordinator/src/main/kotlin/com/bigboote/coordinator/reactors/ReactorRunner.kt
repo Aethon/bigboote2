@@ -12,14 +12,14 @@ private val logger = LoggerFactory.getLogger(ReactorRunner::class.java)
  * cancels all subscriptions.
  *
  * Phase 10: [SpawnReactor]
- * Phase 13: MessageDeliveryReactor (add to constructor then)
+ * Phase 13: [MessageDeliveryReactor]
  * Phase 15: SystemMessageReactor, EffortLifecycleReactor (add to constructor then)
  *
  * See Architecture doc Section 10.
  */
 class ReactorRunner(
     private val spawnReactor: SpawnReactor,
-    // Phase 13+: private val messageDeliveryReactor: MessageDeliveryReactor,
+    private val messageDeliveryReactor: MessageDeliveryReactor,
     // Phase 15+: private val systemMessageReactor: SystemMessageReactor,
     // Phase 15+: private val effortLifecycleReactor: EffortLifecycleReactor,
 ) {
@@ -32,7 +32,7 @@ class ReactorRunner(
     fun start() {
         logger.info("ReactorRunner starting reactors...")
         spawnReactor.start()
-        // Phase 13+: messageDeliveryReactor.start()
+        messageDeliveryReactor.start()
         // Phase 15+: systemMessageReactor.start()
         // Phase 15+: effortLifecycleReactor.start()
         logger.info("ReactorRunner: all reactors started")
@@ -44,7 +44,7 @@ class ReactorRunner(
      */
     fun stop() {
         spawnReactor.stop()
-        // Phase 13+: messageDeliveryReactor.stop()
+        messageDeliveryReactor.stop()
         // Phase 15+: systemMessageReactor.stop()
         // Phase 15+: effortLifecycleReactor.stop()
         logger.info("ReactorRunner: all reactors stopped")

@@ -1,5 +1,7 @@
 package com.bigboote.coordinator.proxy.agent
 
+import com.bigboote.coordinator.proxy.CollaboratorProxy
+import com.bigboote.domain.events.ConversationEvent.MessagePosted
 import com.bigboote.domain.values.AgentId
 import com.bigboote.domain.values.AgentTypeId
 import com.bigboote.domain.values.EffortId
@@ -7,15 +9,22 @@ import com.bigboote.domain.values.EffortId
 /**
  * Abstraction over a running agent instance's Control API.
  *
+ * Extends [CollaboratorProxy] so that [com.bigboote.coordinator.reactors.MessageDeliveryReactor]
+ * can deliver messages to agents alongside human (ExternalProxy) collaborators.
+ *
  * Implementations send HTTP requests to the agent's /control/v1/ endpoints using
  * the per-instance agent token for authentication.
  *
  * Used by [com.bigboote.coordinator.reactors.SpawnReactor] after container start,
  * and by Phase 15's EffortLifecycleReactor for pause/resume/stop signals.
  *
- * See Architecture doc Section 10.2.
+ * [deliverMessage] is a Phase 12 concern — the coordinator's gateway SSE subscription
+ * endpoint for agents (`/internal/v1/agent/{id}/subscribe-conversation-events`) will
+ * push messages. Phase 13 provides a log-only stub.
+ *
+ * See Architecture doc Sections 9.1, 10.2.
  */
-interface AgentProxy {
+interface AgentProxy : CollaboratorProxy {
     /** Identity of the agent instance this proxy controls. */
     val agentId: AgentId
 

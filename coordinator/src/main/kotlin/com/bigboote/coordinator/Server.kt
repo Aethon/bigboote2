@@ -4,6 +4,8 @@ import com.bigboote.coordinator.api.error.configureErrorHandling
 import com.bigboote.coordinator.api.public.v1.agentTypeRoutes
 import com.bigboote.coordinator.api.public.v1.conversationRoutes
 import com.bigboote.coordinator.api.public.v1.effortRoutes
+import com.bigboote.coordinator.api.public.v1.messagingWebSocketRoutes
+import com.bigboote.coordinator.api.public.v1.sseRoutes
 import com.bigboote.coordinator.auth.configureAuth
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
@@ -12,8 +14,11 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.server.sse.*
+import io.ktor.server.websocket.*
 import kotlinx.serialization.json.Json
 import org.koin.ktor.plugin.Koin
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Configures the Ktor server with plugins, error handling, and routing.
@@ -23,7 +28,9 @@ import org.koin.ktor.plugin.Koin
  * 2. Koin bridge         — exposes the global Koin context to route handlers
  * 3. Authentication      — Bearer (public-api) and GatewayToken (agent-gateway)
  * 4. StatusPages         — maps exceptions to HTTP error responses
- * 5. Routing             — route handlers, grouped by auth scheme
+ * 5. WebSockets          — Phase 13: real-time messaging for external collaborators
+ * 6. SSE                 — Phase 13: event stream for UI/agent clients
+ * 7. Routing             — route handlers, grouped by auth scheme
  *
  * Auth scheme names:
  * - "public-api"    — Authorization: Bearer <token> for /api/v1/ routes
@@ -49,8 +56,17 @@ fun Application.configureServer() {
 
     configureErrorHandling()
 
-    // TODO: Phase 13 — install WebSockets
-    // TODO: Phase 13 — install SSE
+    // Phase 13: WebSockets — real-time messaging for external (human) collaborators.
+    // pingPeriod and timeout keep connections alive through proxies and detect broken clients.
+    install(WebSockets) {
+        pingPeriod = 30.seconds
+        timeout = 60.seconds
+        maxFrameSize = Long.MAX_VALUE
+        masking = false
+    }
+
+    // Phase 13: Server-Sent Events — effort event stream for UI and agent clients.
+    install(SSE)
 
     routing {
         // Health check — unauthenticated; used by runbook verification and load balancers
@@ -61,11 +77,12 @@ fun Application.configureServer() {
         // Coordinator Public API — requires Authorization: Bearer <token>
         authenticate("public-api") {
             route("/api/v1") {
-                effortRoutes()     // Phase 5
-                agentTypeRoutes()  // Phase 6
-                conversationRoutes()  // Phase 11
+                effortRoutes()            // Phase 5
+                agentTypeRoutes()         // Phase 6
+                conversationRoutes()      // Phase 11
+                sseRoutes()               // Phase 13: GET  /api/v1/efforts/{effortId}/stream
+                messagingWebSocketRoutes() // Phase 13: WS  /api/v1/efforts/{effortId}/messaging
                 // Phase 14: Document routes
-                // Phase 13: SSE and WebSocket routes
             }
         }
 
