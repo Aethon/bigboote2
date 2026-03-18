@@ -6,6 +6,7 @@ import com.bigboote.coordinator.projections.db.AgentTypeTable
 import com.bigboote.coordinator.projections.db.ConversationTable
 import com.bigboote.coordinator.projections.db.MessageTable
 import com.bigboote.coordinator.projections.db.EffortTable
+import com.bigboote.coordinator.reactors.ReactorRunner
 import com.bigboote.infra.config.BigbooteConfig
 import com.bigboote.infra.db.DatabaseFactory
 import com.bigboote.infra.koin.sharedInfraModule
@@ -56,10 +57,16 @@ fun main() {
     projectionRunner.start()
     logger.info("ProjectionRunner started")
 
-    // Graceful shutdown: stop projection subscriptions and close the DB pool
-    // when the JVM receives SIGTERM (e.g. docker stop, k8s scale-down).
+    // Start reactors — must happen after projections are running so that the
+    // AgentType read model is populated before SpawnReactor tries to look up dockerImage.
+    val reactorRunner = koin.get<ReactorRunner>()
+    reactorRunner.start()
+    logger.info("ReactorRunner started")
+
+    // Graceful shutdown: stop reactors, then projection subscriptions, then close the DB pool.
     Runtime.getRuntime().addShutdownHook(Thread {
-        logger.info("Shutdown hook: stopping projections and closing DB pool...")
+        logger.info("Shutdown hook: stopping reactors, projections, and closing DB pool...")
+        reactorRunner.stop()
         projectionRunner.stop()
         databaseFactory.close()
         logger.info("Shutdown complete")

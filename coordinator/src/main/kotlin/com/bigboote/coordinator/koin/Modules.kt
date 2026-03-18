@@ -16,7 +16,17 @@ import com.bigboote.coordinator.projections.ProjectionRunner
 import com.bigboote.coordinator.projections.repositories.AgentTypeReadRepository
 import com.bigboote.coordinator.projections.repositories.ConversationReadRepository
 import com.bigboote.coordinator.projections.repositories.EffortReadRepository
+import com.bigboote.coordinator.proxy.ProxyRegistry
+import com.bigboote.coordinator.proxy.spawn.DockerSpawnStrategy
+import com.bigboote.coordinator.proxy.spawn.SpawnStrategy
+import com.bigboote.coordinator.reactors.ReactorRunner
+import com.bigboote.coordinator.reactors.SpawnReactor
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
 import kotlinx.datetime.Clock
+import kotlinx.serialization.json.Json
 import org.koin.dsl.module
 
 /**
@@ -68,12 +78,38 @@ val ProjectionModule = module {
 }
 
 val ReactorModule = module {
-    // Phase 10+: SpawnReactor, EffortLifecycleReactor, MessageDeliveryReactor,
-    //            SystemMessageReactor, ReactorRunner
+    // Phase 10: SpawnReactor and ReactorRunner
+    single {
+        SpawnReactor(
+            eventStore               = get(),
+            agentTypeReadRepository  = get(),
+            spawnStrategy            = get(),
+            proxyRegistry            = get(),
+            coordinatorGatewayUrl    = System.getenv("BIGBOOTE_COORDINATOR_GATEWAY_URL")
+                ?: "http://host.docker.internal:8080/internal/v1",
+        )
+    }
+    single { ReactorRunner(get()) }
+    // Phase 13+: MessageDeliveryReactor
+    // Phase 15+: SystemMessageReactor, EffortLifecycleReactor
 }
 
 val ProxyModule = module {
-    // Phase 10+: ProxyRegistry, DockerSpawnStrategy, SpawnStrategyFactory
+    // Phase 10: ProxyRegistry, shared HttpClient, DockerSpawnStrategy
+    single { ProxyRegistry() }
+    single {
+        // Shared Ktor HTTP client for all DockerAgentProxy instances.
+        // Configured with JSON content negotiation to match the agent Control API.
+        HttpClient(CIO) {
+            install(ContentNegotiation) {
+                json(Json {
+                    ignoreUnknownKeys = true
+                    encodeDefaults = true
+                })
+            }
+        }
+    }
+    single<SpawnStrategy> { DockerSpawnStrategy(get()) }
 }
 
 val MessagingModule = module {
