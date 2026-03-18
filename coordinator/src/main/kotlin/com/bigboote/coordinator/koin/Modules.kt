@@ -2,6 +2,7 @@ package com.bigboote.coordinator.koin
 
 import com.bigboote.coordinator.aggregates.AggregateRepository
 import com.bigboote.coordinator.aggregates.agenttype.AgentTypeCommandHandler
+import com.bigboote.coordinator.aggregates.conversation.ConversationCommandHandler
 import com.bigboote.coordinator.aggregates.effort.EffortCommandHandler
 import com.bigboote.coordinator.auth.BearerTokenValidator
 import com.bigboote.coordinator.auth.GatewayTokenValidator
@@ -9,9 +10,11 @@ import com.bigboote.coordinator.auth.StubBearerTokenValidator
 import com.bigboote.coordinator.auth.TokenGenerator
 import com.bigboote.coordinator.auth.TokenStore
 import com.bigboote.coordinator.projections.AgentTypeSummaryProjection
+import com.bigboote.coordinator.projections.ConversationProjection
 import com.bigboote.coordinator.projections.EffortSummaryProjection
 import com.bigboote.coordinator.projections.ProjectionRunner
 import com.bigboote.coordinator.projections.repositories.AgentTypeReadRepository
+import com.bigboote.coordinator.projections.repositories.ConversationReadRepository
 import com.bigboote.coordinator.projections.repositories.EffortReadRepository
 import kotlinx.datetime.Clock
 import org.koin.dsl.module
@@ -48,7 +51,7 @@ val DomainModule = module {
     // Clock.System passed per Architecture doc Section 13.1 for testability.
     single { EffortCommandHandler(get(), Clock.System) }
     single { AgentTypeCommandHandler(get(), Clock.System) }
-    // Phase 11: ConversationCommandHandler
+    single { ConversationCommandHandler(get(), Clock.System) }  // Phase 11
     // Phase 14: DocumentCommandHandler
     // Phase 15: SystemCollaborator
 }
@@ -58,8 +61,9 @@ val ProjectionModule = module {
     single { EffortReadRepository() }
     single { AgentTypeSummaryProjection(get()) }
     single { AgentTypeReadRepository() }
-    single { ProjectionRunner(get(), get()) }
-    // Phase 11+: ConversationProjection, ConversationReadRepository
+    single { ConversationProjection(get()) }       // Phase 11
+    single { ConversationReadRepository() }        // Phase 11
+    single { ProjectionRunner(get(), get(), get()) }
     // Phase 14+: DocumentListProjection, DocumentReadRepository
 }
 

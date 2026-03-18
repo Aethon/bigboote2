@@ -15,16 +15,17 @@ private val logger = LoggerFactory.getLogger(ProjectionRunner::class.java)
  * which subscribes to their respective event streams. On shutdown, [stop] cancels
  * all active subscriptions.
  *
- * Phase 5: [EffortSummaryProjection]
- * Phase 6: [AgentTypeSummaryProjection]  ← added here
- * Phase 11+: ConversationProjection, DocumentListProjection (add to constructor then)
+ * Phase 5:  [EffortSummaryProjection]
+ * Phase 6:  [AgentTypeSummaryProjection]
+ * Phase 11: [ConversationProjection]
+ * Phase 14+: DocumentListProjection (add to constructor then)
  *
  * See Architecture doc Section 8.
  */
 class ProjectionRunner(
     private val effortSummaryProjection: EffortSummaryProjection,
     private val agentTypeSummaryProjection: AgentTypeSummaryProjection,
-    // Phase 11+: private val conversationProjection: Projection,
+    private val conversationProjection: ConversationProjection,   // Phase 11
     // Phase 14+: private val documentListProjection: Projection,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -40,6 +41,7 @@ class ProjectionRunner(
             try {
                 effortSummaryProjection.start()
                 agentTypeSummaryProjection.start()
+                conversationProjection.start()
                 logger.info("ProjectionRunner: all projections started")
             } catch (e: Exception) {
                 logger.error("ProjectionRunner: error starting projections", e)
@@ -54,6 +56,7 @@ class ProjectionRunner(
     fun stop() {
         effortSummaryProjection.stop()
         agentTypeSummaryProjection.stop()
+        conversationProjection.stop()
         logger.info("ProjectionRunner: all projections stopped")
     }
 }
