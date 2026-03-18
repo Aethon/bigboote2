@@ -2,6 +2,7 @@ package com.bigboote.coordinator
 
 import com.bigboote.coordinator.api.error.configureErrorHandling
 import com.bigboote.coordinator.api.public.v1.agentTypeRoutes
+import com.bigboote.coordinator.api.public.v1.conversationRoutes
 import com.bigboote.coordinator.api.public.v1.effortRoutes
 import com.bigboote.coordinator.auth.configureAuth
 import io.ktor.http.*
@@ -62,7 +63,7 @@ fun Application.configureServer() {
             route("/api/v1") {
                 effortRoutes()     // Phase 5
                 agentTypeRoutes()  // Phase 6
-                // Phase 11: Conversation routes
+                conversationRoutes()  // Phase 11
                 // Phase 14: Document routes
                 // Phase 13: SSE and WebSocket routes
             }

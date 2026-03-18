@@ -3,6 +3,8 @@ package com.bigboote.coordinator
 import com.bigboote.coordinator.koin.*
 import com.bigboote.coordinator.projections.ProjectionRunner
 import com.bigboote.coordinator.projections.db.AgentTypeTable
+import com.bigboote.coordinator.projections.db.ConversationTable
+import com.bigboote.coordinator.projections.db.MessageTable
 import com.bigboote.coordinator.projections.db.EffortTable
 import com.bigboote.infra.config.BigbooteConfig
 import com.bigboote.infra.db.DatabaseFactory
@@ -42,7 +44,7 @@ fun main() {
 
     // Create or migrate Postgres schema for all read-model tables.
     // SchemaUtils.createMissingTablesAndColumns is idempotent — safe on every restart.
-    databaseFactory.createTables(EffortTable, AgentTypeTable)
+    databaseFactory.createTables(EffortTable, AgentTypeTable, ConversationTable, MessageTable)
     logger.info("Database schema initialised")
 
     // KurrentDB client is eagerly created by Koin; log confirmation
