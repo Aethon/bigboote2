@@ -23,10 +23,10 @@ import org.koin.dsl.module
  * Tests for the Phase 7 authentication layer installed by [configureAuth].
  *
  * Verifies the Phase 7 verification gate:
- *  - Public API routes (/api/v1/*) reject requests without Authorization header (401)
+ *  - Public API routes (/api/v1/{*}) reject requests without Authorization header (401)
  *  - Public API routes reject requests with a malformed Authorization header (401)
  *  - Public API routes accept any well-formed Bearer token (200/any success code)
- *  - Agent Gateway routes (/internal/v1/*) reject requests without X-Gateway-Token (401)
+ *  - Agent Gateway routes (/internal/v1/{*}) reject requests without X-Gateway-Token (401)
  *  - Agent Gateway routes reject requests with an unknown X-Gateway-Token (401)
  *  - Agent Gateway routes accept a known X-Gateway-Token registered in TokenStore
  *  - Health check (/health) is unauthenticated (200)

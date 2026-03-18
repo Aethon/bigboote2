@@ -16,7 +16,7 @@ import com.bigboote.domain.values.EffortId
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
-import io.ktor.client.plugins.defaultrequest.*
+import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -37,7 +37,7 @@ import org.koin.dsl.module
  * ConversationReadRepository) are replaced with MockK stubs so that no KurrentDB or
  * Postgres connection is required.
  *
- * All requests to /api/v1/* require `Authorization: Bearer <token>`.
+ * All requests to /api/v1/{*} require `Authorization: Bearer <token>`.
  * [authenticatedClient] provides a test client pre-configured with a stub bearer token.
  *
  * URL encoding note: The '#' character in channel ConvIds (e.g. "conv:#general") must

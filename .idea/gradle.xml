@@ -24,6 +24,7 @@
             <option value="$PROJECT_DIR$/shared-domain" />
             <option value="$PROJECT_DIR$/shared-events" />
             <option value="$PROJECT_DIR$/shared-infra" />
+            <option value="$PROJECT_DIR$/vue-ui" />
           </set>
         </option>
       </GradleProjectSettings>

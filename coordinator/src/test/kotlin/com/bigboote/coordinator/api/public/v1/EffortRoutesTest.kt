@@ -18,7 +18,7 @@ import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
-import io.ktor.client.plugins.defaultrequest.*
+import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -39,7 +39,7 @@ import org.koin.dsl.module
  * EffortReadRepository) are replaced with MockK stubs so that no KurrentDB or
  * Postgres connection is required.
  *
- * Phase 7 addition: all requests to /api/v1/* require
+ * Phase 7 addition: all requests to /api/v1/{*} require
  * `Authorization: Bearer <token>`. [authenticatedClient] provides a default
  * test client pre-configured with a stub bearer token. Auth beans
  * (BearerTokenValidator, TokenStore, GatewayTokenValidator) are registered in
