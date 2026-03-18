@@ -35,6 +35,7 @@ import com.bigboote.coordinator.storage.S3DocumentStorage
 import com.bigboote.infra.config.BigbooteConfig
 import com.bigboote.coordinator.proxy.ProxyRegistry
 import com.bigboote.coordinator.proxy.spawn.DockerSpawnStrategy
+import com.bigboote.coordinator.proxy.spawn.FlyMachineSpawnStrategy
 import com.bigboote.coordinator.proxy.spawn.SpawnStrategy
 import com.bigboote.coordinator.reactors.EffortLifecycleReactor
 import com.bigboote.coordinator.reactors.MessageDeliveryReactor
@@ -129,10 +130,12 @@ val ReactorModule = module {
 
 val ProxyModule = module {
     // Phase 10: ProxyRegistry, shared HttpClient, DockerSpawnStrategy
+    // Phase 20: FlyMachineSpawnStrategy; active strategy selected via BIGBOOTE_SPAWN_STRATEGY env var.
     single { ProxyRegistry() }
     single {
-        // Shared Ktor HTTP client for all DockerAgentProxy instances.
-        // Configured with JSON content negotiation to match the agent Control API.
+        // Shared Ktor HTTP client for all proxy instances (Docker and Fly).
+        // Configured with JSON content negotiation to match both the agent Control API
+        // and the Fly Machines REST API.
         HttpClient(CIO) {
             install(ContentNegotiation) {
                 json(Json {
@@ -142,7 +145,17 @@ val ProxyModule = module {
             }
         }
     }
-    single<SpawnStrategy> { DockerSpawnStrategy(get()) }
+    // Both concrete strategies are registered so they can be resolved by type.
+    single { DockerSpawnStrategy(get()) }
+    single { FlyMachineSpawnStrategy(get<BigbooteConfig>().fly, get()) }
+    // The SpawnStrategy interface binding is determined at startup by BIGBOOTE_SPAWN_STRATEGY.
+    // Supported values: "docker" (default), "fly".
+    single<SpawnStrategy> {
+        when (System.getenv("BIGBOOTE_SPAWN_STRATEGY")?.lowercase() ?: "docker") {
+            "fly"  -> get<FlyMachineSpawnStrategy>()
+            else   -> get<DockerSpawnStrategy>()
+        }
+    }
 }
 
 val MessagingModule = module {

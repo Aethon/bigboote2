@@ -8,6 +8,8 @@ data class BigbooteConfig(
     val kurrent: KurrentConfig,
     val database: DatabaseConfig,
     val s3: S3Config,
+    /** Fly.io configuration used by FlyMachineSpawnStrategy (Phase 20). */
+    val fly: FlyConfig,
 ) {
     companion object {
         /**
@@ -39,6 +41,7 @@ data class BigbooteConfig(
                 accessKeyId     = System.getenv("BIGBOOTE_S3_ACCESS_KEY"),
                 secretAccessKey = System.getenv("BIGBOOTE_S3_SECRET_KEY"),
             ),
+            fly = FlyConfig.fromEnvironment(),
         )
     }
 }
