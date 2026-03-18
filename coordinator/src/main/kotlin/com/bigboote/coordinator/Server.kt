@@ -3,6 +3,7 @@ package com.bigboote.coordinator
 import com.bigboote.coordinator.api.error.configureErrorHandling
 import com.bigboote.coordinator.api.public.v1.agentTypeRoutes
 import com.bigboote.coordinator.api.public.v1.conversationRoutes
+import com.bigboote.coordinator.api.public.v1.documentRoutes
 import com.bigboote.coordinator.api.public.v1.effortRoutes
 import com.bigboote.coordinator.api.public.v1.messagingWebSocketRoutes
 import com.bigboote.coordinator.api.public.v1.sseRoutes
@@ -82,7 +83,7 @@ fun Application.configureServer() {
                 conversationRoutes()      // Phase 11
                 sseRoutes()               // Phase 13: GET  /api/v1/efforts/{effortId}/stream
                 messagingWebSocketRoutes() // Phase 13: WS  /api/v1/efforts/{effortId}/messaging
-                // Phase 14: Document routes
+                documentRoutes()           // Phase 14: CRUD /api/v1/efforts/{effortId}/documents
             }
         }
 

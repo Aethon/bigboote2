@@ -18,7 +18,7 @@ private val logger = LoggerFactory.getLogger(ProjectionRunner::class.java)
  * Phase 5:  [EffortSummaryProjection]
  * Phase 6:  [AgentTypeSummaryProjection]
  * Phase 11: [ConversationProjection]
- * Phase 14+: DocumentListProjection (add to constructor then)
+ * Phase 14: [DocumentListProjection]
  *
  * See Architecture doc Section 8.
  */
@@ -26,7 +26,7 @@ class ProjectionRunner(
     private val effortSummaryProjection: EffortSummaryProjection,
     private val agentTypeSummaryProjection: AgentTypeSummaryProjection,
     private val conversationProjection: ConversationProjection,   // Phase 11
-    // Phase 14+: private val documentListProjection: Projection,
+    private val documentListProjection: DocumentListProjection,   // Phase 14
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -42,6 +42,7 @@ class ProjectionRunner(
                 effortSummaryProjection.start()
                 agentTypeSummaryProjection.start()
                 conversationProjection.start()
+                documentListProjection.start()
                 logger.info("ProjectionRunner: all projections started")
             } catch (e: Exception) {
                 logger.error("ProjectionRunner: error starting projections", e)
@@ -57,6 +58,7 @@ class ProjectionRunner(
         effortSummaryProjection.stop()
         agentTypeSummaryProjection.stop()
         conversationProjection.stop()
+        documentListProjection.stop()
         logger.info("ProjectionRunner: all projections stopped")
     }
 }
