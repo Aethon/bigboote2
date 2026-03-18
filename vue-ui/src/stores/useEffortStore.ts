@@ -37,7 +37,7 @@ export const useEffortStore = defineStore('efforts', () => {
   )
 
   const activeEfforts = computed(() =>
-    efforts.value.filter((e) => e.status === 'ACTIVE'),
+    efforts.value.filter((e) => e.status === 'active'),
   )
 
   // ------------------------------------------------------------------ actions

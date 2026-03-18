@@ -28,7 +28,7 @@ export interface EffortSummary {
   effortId: string
   name: string
   goal: string
-  status: 'CREATED' | 'ACTIVE' | 'PAUSED' | 'CLOSED'
+  status: 'created' | 'active' | 'paused' | 'closed'
   leadName: string
   collaboratorCount: number
   createdAt: string
@@ -48,9 +48,9 @@ export interface EffortDetail extends EffortSummary {
 
 const BASE = '/api/v1/efforts'
 
-/** POST /api/v1/efforts — create a new effort */
+/** POST /api/v1/efforts/create — create a new effort */
 export async function createEffort(req: CreateEffortRequest): Promise<CreateEffortResponse> {
-  const res = await apiClient.post<CreateEffortResponse>(BASE, req)
+  const res = await apiClient.post<CreateEffortResponse>(`${BASE}/create`, req)
   return res.data
 }
 
