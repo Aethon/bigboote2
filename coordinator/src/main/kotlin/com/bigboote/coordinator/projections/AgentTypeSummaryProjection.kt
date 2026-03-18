@@ -20,7 +20,20 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
-private val logger = LoggerFactory.getLogger(AgentTypeSummaryProjection::class.java)
+private val logger = LoggerFactory.getLogger(AgentTypeSummaryProjectionImpl::class.java)
+
+/**
+ * Contract for the AgentType summary projection, extending the base [Projection]
+ * lifecycle contract with the [trackAgentType] read-your-writes hook.
+ * Extracted as an interface so route-layer tests can mock it.
+ */
+interface AgentTypeSummaryProjection : Projection {
+    /**
+     * Begin tracking a new AgentType stream immediately after it is created.
+     * Idempotent — safe to call multiple times with the same ID.
+     */
+    fun trackAgentType(agentTypeId: AgentTypeId)
+}
 
 /**
  * Maintains the `agent_types` Postgres read model from KurrentDB AgentType events.
@@ -36,9 +49,9 @@ private val logger = LoggerFactory.getLogger(AgentTypeSummaryProjection::class.j
  *
  * See Architecture doc Section 8.2 and Event Schema doc Section 3.
  */
-class AgentTypeSummaryProjection(
+class AgentTypeSummaryProjectionImpl(
     private val eventStore: EventStore,
-) : Projection {
+) : AgentTypeSummaryProjection {
 
     override val name = "agent-type-summary"
     override val streamPattern = "/agenttype:*"
@@ -80,7 +93,7 @@ class AgentTypeSummaryProjection(
      * Idempotent: calling twice for the same ID has no effect.
      * Called by API routes immediately after a new AgentType is created.
      */
-    fun trackAgentType(agentTypeId: AgentTypeId) {
+    override fun trackAgentType(agentTypeId: AgentTypeId) {
         val streamId = StreamNames.agentType(agentTypeId)
         if (!subscriptions.containsKey(streamId)) {
             subscribeToStream(agentTypeId)

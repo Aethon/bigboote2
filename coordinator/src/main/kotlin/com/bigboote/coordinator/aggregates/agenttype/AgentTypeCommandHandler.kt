@@ -15,9 +15,19 @@ import com.bigboote.events.streams.StreamNames
 import kotlinx.datetime.Clock
 import org.slf4j.LoggerFactory
 
-private val logger = LoggerFactory.getLogger(
-    "com.bigboote.coordinator.aggregates.agenttype.AgentTypeCommandHandler"
-)
+private val logger = LoggerFactory.getLogger(AgentTypeCommandHandlerImpl::class.java)
+
+/**
+ * Contract for handling all AgentType aggregate commands.
+ * Extracted as an interface so that route-layer tests can mock it without
+ * requiring a live EventStore or KurrentDB connection.
+ */
+interface AgentTypeCommandHandler {
+    /** Create a new AgentType. Returns the created [AgentTypeId]. */
+    suspend fun handle(cmd: CreateAgentType): AgentTypeId
+    /** Update an existing AgentType. */
+    suspend fun handle(cmd: UpdateAgentType)
+}
 
 /**
  * Handles all AgentType aggregate commands by loading state from the event store,
@@ -35,10 +45,10 @@ private val logger = LoggerFactory.getLogger(
  *
  * See Architecture doc Section 6.2 and Event Schema doc Section 3.
  */
-class AgentTypeCommandHandler(
+class AgentTypeCommandHandlerImpl(
     private val repo: AggregateRepository,
     private val clock: Clock,
-) {
+) : AgentTypeCommandHandler {
 
     /**
      * Create a new AgentType. Emits [AgentTypeCreated] on a new stream.
@@ -47,7 +57,7 @@ class AgentTypeCommandHandler(
      * Throws a storage-layer exception (WrongExpectedVersionException) if a stream
      * with this ID already exists — the client should treat this as a conflict.
      */
-    suspend fun handle(cmd: CreateAgentType): AgentTypeId {
+    override suspend fun handle(cmd: CreateAgentType): AgentTypeId {
         val event = AgentTypeCreated(
             agentTypeId   = cmd.agentTypeId,
             name          = cmd.name,
@@ -81,7 +91,7 @@ class AgentTypeCommandHandler(
      * Does NOT affect running AgentInstances — new configuration takes effect only
      * for instances spawned after this update.
      */
-    suspend fun handle(cmd: UpdateAgentType) {
+    override suspend fun handle(cmd: UpdateAgentType) {
         val (_, version) = loadAgentType(cmd.agentTypeId)
 
         val event = AgentTypeUpdated(
