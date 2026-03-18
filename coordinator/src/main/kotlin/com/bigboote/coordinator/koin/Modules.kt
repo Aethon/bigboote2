@@ -27,9 +27,12 @@ import com.bigboote.infra.config.BigbooteConfig
 import com.bigboote.coordinator.proxy.ProxyRegistry
 import com.bigboote.coordinator.proxy.spawn.DockerSpawnStrategy
 import com.bigboote.coordinator.proxy.spawn.SpawnStrategy
+import com.bigboote.coordinator.reactors.EffortLifecycleReactor
 import com.bigboote.coordinator.reactors.MessageDeliveryReactor
 import com.bigboote.coordinator.reactors.ReactorRunner
 import com.bigboote.coordinator.reactors.SpawnReactor
+import com.bigboote.coordinator.reactors.SystemMessageReactor
+import com.bigboote.coordinator.system.SystemCollaborator
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -74,7 +77,7 @@ val DomainModule = module {
     single { AgentTypeCommandHandler(get(), Clock.System) }
     single { ConversationCommandHandler(get(), Clock.System) }  // Phase 11
     single { DocumentCommandHandler(get(), Clock.System, get()) }  // Phase 14
-    // Phase 15: SystemCollaborator
+    single { SystemCollaborator(get()) }                           // Phase 15
 }
 
 val ProjectionModule = module {
@@ -109,8 +112,10 @@ val ReactorModule = module {
             conversationReadRepository  = get(),
         )
     }
-    single { ReactorRunner(get(), get()) }
-    // Phase 15+: SystemMessageReactor, EffortLifecycleReactor
+    // Phase 15: SystemMessageReactor, EffortLifecycleReactor
+    single { SystemMessageReactor(get(), get(), get()) }
+    single { EffortLifecycleReactor(get(), get()) }
+    single { ReactorRunner(get(), get(), get(), get()) }
 }
 
 val ProxyModule = module {
