@@ -92,10 +92,12 @@ class DockerSpawnStrategy(
         )
 
         DockerAgentProxy(
-            agentId     = config.agentId,
-            controlUrl  = controlUrl,
-            agentToken  = config.agentToken,
-            httpClient  = httpClient,
+            agentId          = config.agentId,
+            controlUrl       = controlUrl,
+            collaboratorName = config.collaboratorName,
+            effortId         = config.effortId,
+            agentToken       = config.agentToken,
+            httpClient       = httpClient,
         )
     }
 

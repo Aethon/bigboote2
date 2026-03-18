@@ -1,7 +1,9 @@
 package com.bigboote.coordinator.proxy.agent
 
+import com.bigboote.domain.events.ConversationEvent.MessagePosted
 import com.bigboote.domain.values.AgentId
 import com.bigboote.domain.values.AgentTypeId
+import com.bigboote.domain.values.CollaboratorName
 import com.bigboote.domain.values.EffortId
 import io.ktor.client.*
 import io.ktor.client.call.*
@@ -29,9 +31,25 @@ private val logger = LoggerFactory.getLogger(DockerAgentProxy::class.java)
 class DockerAgentProxy(
     override val agentId: AgentId,
     override val controlUrl: String,   // e.g. "http://127.0.0.1:49153/control/v1"
+    override val collaboratorName: CollaboratorName,
+    override val effortId: EffortId,
     private val agentToken: String,
     private val httpClient: HttpClient,
 ) : AgentProxy {
+
+    /**
+     * Phase 12 stub: agent message delivery will be implemented via the coordinator's
+     * SSE gateway subscription endpoint (`/internal/v1/agent/{id}/subscribe-conversation-events`).
+     * For now, log the delivery attempt so that Phase 13 integration tests can verify
+     * [com.bigboote.coordinator.reactors.MessageDeliveryReactor] invokes this method.
+     */
+    override suspend fun deliverMessage(event: MessagePosted) {
+        logger.debug(
+            "DockerAgentProxy: deliverMessage stub — agent {} would receive message {} " +
+            "(Phase 12 SSE gateway delivery pending)",
+            agentId, event.messageId,
+        )
+    }
 
     override suspend fun start(
         effortId: EffortId,

@@ -16,9 +16,12 @@ import com.bigboote.coordinator.projections.ProjectionRunner
 import com.bigboote.coordinator.projections.repositories.AgentTypeReadRepository
 import com.bigboote.coordinator.projections.repositories.ConversationReadRepository
 import com.bigboote.coordinator.projections.repositories.EffortReadRepository
+import com.bigboote.coordinator.messaging.NativeMessagingAdapter
+import com.bigboote.coordinator.messaging.SseEventBroadcaster
 import com.bigboote.coordinator.proxy.ProxyRegistry
 import com.bigboote.coordinator.proxy.spawn.DockerSpawnStrategy
 import com.bigboote.coordinator.proxy.spawn.SpawnStrategy
+import com.bigboote.coordinator.reactors.MessageDeliveryReactor
 import com.bigboote.coordinator.reactors.ReactorRunner
 import com.bigboote.coordinator.reactors.SpawnReactor
 import io.ktor.client.*
@@ -78,7 +81,7 @@ val ProjectionModule = module {
 }
 
 val ReactorModule = module {
-    // Phase 10: SpawnReactor and ReactorRunner
+    // Phase 10: SpawnReactor
     single {
         SpawnReactor(
             eventStore               = get(),
@@ -89,8 +92,15 @@ val ReactorModule = module {
                 ?: "http://host.docker.internal:8080/internal/v1",
         )
     }
-    single { ReactorRunner(get()) }
-    // Phase 13+: MessageDeliveryReactor
+    // Phase 13: MessageDeliveryReactor
+    single {
+        MessageDeliveryReactor(
+            eventStore                  = get(),
+            proxyRegistry               = get(),
+            conversationReadRepository  = get(),
+        )
+    }
+    single { ReactorRunner(get(), get()) }
     // Phase 15+: SystemMessageReactor, EffortLifecycleReactor
 }
 
@@ -113,7 +123,10 @@ val ProxyModule = module {
 }
 
 val MessagingModule = module {
-    // Phase 13+: SseEventBroadcaster, NativeMessagingAdapter
+    // Phase 13: SseEventBroadcaster fans KurrentDB events to SSE connections.
+    // NativeMessagingAdapter creates ExternalProxy instances for WebSocket users.
+    single { SseEventBroadcaster(get()) }
+    single { NativeMessagingAdapter() }
 }
 
 val ApiModule = module {

@@ -2,6 +2,7 @@ package com.bigboote.coordinator.projections.repositories
 
 import com.bigboote.coordinator.projections.db.ConversationTable
 import com.bigboote.coordinator.projections.db.MessageTable
+import com.bigboote.domain.values.CollaboratorName
 import com.bigboote.domain.values.EffortId
 import com.bigboote.infra.db.dbQuery
 import kotlinx.datetime.Instant
@@ -81,6 +82,40 @@ class ConversationReadRepository {
             .orderBy(MessageTable.postedAt, SortOrder.ASC)
             .limit(clampedLimit).offset(from.toLong())
             .map { it.toMessageRow() }
+    }
+
+    /**
+     * Return the [CollaboratorName] list for a conversation.
+     * Used by [com.bigboote.coordinator.reactors.MessageDeliveryReactor] to resolve
+     * the set of recipients for a [com.bigboote.domain.events.ConversationEvent.MessagePosted].
+     *
+     * Returns an empty list if the conversation is not yet in the read model
+     * (projection lag); the reactor will simply deliver to no-one in that case.
+     */
+    suspend fun getMembersForConv(effortId: EffortId, convId: String): List<CollaboratorName> = dbQuery {
+        ConversationTable
+            .selectAll()
+            .where {
+                (ConversationTable.effortId eq effortId.value) and
+                (ConversationTable.convId eq convId)
+            }
+            .singleOrNull()
+            ?.let { row ->
+                val membersJson = row[ConversationTable.members]
+                try {
+                    json.decodeFromString<List<String>>(membersJson)
+                        .mapNotNull { str ->
+                            runCatching { CollaboratorName.from(str) }.getOrNull()
+                        }
+                } catch (e: Exception) {
+                    logger.warn(
+                        "Failed to deserialize members for conv {} in effort {}: {}",
+                        convId, effortId, e.message,
+                    )
+                    emptyList()
+                }
+            }
+            ?: emptyList()
     }
 
     // ------------------------------------------------------------------ helpers
