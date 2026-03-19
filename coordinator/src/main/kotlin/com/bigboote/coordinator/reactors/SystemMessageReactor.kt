@@ -5,11 +5,11 @@ import com.bigboote.coordinator.system.SystemCollaborator
 import com.bigboote.domain.aggregates.EffortState
 import com.bigboote.domain.events.EffortEvent
 import com.bigboote.domain.events.EffortEvent.*
-import com.bigboote.domain.values.CollaboratorName
+import com.bigboote.domain.events.asEffortStream
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.EventStore
 import com.bigboote.events.eventstore.EventSubscription
-import com.bigboote.events.streams.StreamNames
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger(SystemMessageReactor::class.java)
@@ -17,8 +17,10 @@ private val logger = LoggerFactory.getLogger(SystemMessageReactor::class.java)
 /**
  * Reacts to Effort lifecycle events and sends `@system` DMs to all collaborators.
  *
- * Uses a persistent subscription on `\$all` (group: `system-message-reactor`).
- * On each lifecycle event the reactor:
+ * Uses [EventStore.subscribeToAll] for at-least-once delivery across coordinator
+ * restarts. On each lifecycle event the reactor extracts the [EffortId] from
+ * [envelope.streamName][com.bigboote.events.eventstore.EventEnvelope.streamName]
+ * via [asEffortStream], then:
  * 1. Loads the current [EffortState] from KurrentDB to obtain the collaborator list.
  * 2. Sends a DM from `@system` to each non-system collaborator via [SystemCollaborator].
  *
@@ -43,29 +45,25 @@ class SystemMessageReactor(
     private var subscription: EventSubscription? = null
 
     /**
-     * Start the persistent subscription on `\$all`.
+     * Start the \$all catch-up subscription.
      * Called by [ReactorRunner] at coordinator startup.
      */
     fun start() {
-        subscription = eventStore.subscribePersistent(
-            streamId  = "\$all",
-            groupName = "system-message-reactor",
-        ) { envelope ->
-            when (val event = envelope.data) {
-                is EffortStarted  -> handleLifecycle(event.effortId, "started")
-                is EffortPaused   -> handleLifecycle(event.effortId, "paused")
-                is EffortResumed  -> handleLifecycle(event.effortId, "resumed")
-                is EffortClosed   -> handleLifecycle(event.effortId, "closed")
+        subscription = eventStore.subscribeToAll { envelope ->
+            val effortId by lazy { envelope.streamName.asEffortStream().id }
+            when (envelope.data) {
+                is EffortStarted  -> handleLifecycle(effortId, "started")
+                is EffortPaused   -> handleLifecycle(effortId, "paused")
+                is EffortResumed  -> handleLifecycle(effortId, "resumed")
+                is EffortClosed   -> handleLifecycle(effortId, "closed")
                 else              -> Unit  // ignore all other events
             }
         }
-        logger.info(
-            "SystemMessageReactor started (persistent subscription on \$all, group=system-message-reactor)"
-        )
+        logger.info("SystemMessageReactor started (\$all catch-up subscription)")
     }
 
     /**
-     * Stop the persistent subscription.
+     * Stop the subscription.
      * Called by [ReactorRunner] on coordinator shutdown.
      */
     fun stop() {
@@ -79,14 +77,7 @@ class SystemMessageReactor(
     private suspend fun handleLifecycle(effortId: EffortId, verb: String) {
         logger.debug("SystemMessageReactor: effort {} {}", effortId, verb)
 
-        val state = loadEffortState(effortId)
-        if (state.effortId.value == "effort:__empty__") {
-            logger.warn(
-                "SystemMessageReactor: EffortState not found for {} — skipping @system DMs",
-                effortId,
-            )
-            return
-        }
+        val state = loadEffortState(effortId) ?: throw IllegalStateException("Effort not found: $effortId")
 
         val body = "Effort '${state.name}' has $verb."
 
@@ -104,13 +95,12 @@ class SystemMessageReactor(
         }
     }
 
-    private suspend fun loadEffortState(effortId: EffortId): EffortState {
-        val (state, _) = repo.load(
-            StreamNames.effort(effortId),
-            EffortState.EMPTY,
-        ) { s, event ->
-            if (event is EffortEvent) s.apply(event) else s
-        }
-        return state
+    private suspend fun loadEffortState(effortId: EffortId): EffortState? {
+        return repo.maybeLoad(
+            EffortEvent::class,
+            StreamName.Effort(effortId),
+            EffortState::start,
+            EffortState::apply
+        )?.first
     }
 }

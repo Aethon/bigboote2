@@ -6,11 +6,12 @@ import com.bigboote.coordinator.api.error.ValidationException
 import com.bigboote.domain.aggregates.ConversationState
 import com.bigboote.domain.commands.ConversationCommand.*
 import com.bigboote.domain.errors.DomainError
+import com.bigboote.domain.events.ConversationEvent
 import com.bigboote.domain.events.ConversationEvent.*
 import com.bigboote.domain.values.ConvId
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.ExpectedVersion
-import com.bigboote.events.streams.StreamNames
 import kotlinx.datetime.Clock
 import org.slf4j.LoggerFactory
 
@@ -61,15 +62,13 @@ class ConversationCommandHandlerImpl(
         }
 
         val event = ConversationCreated(
-            convId   = convId.value,
-            effortId = cmd.effortId,
             convName = cmd.convName,
-            members  = cmd.members,
+            members = cmd.members,
             createdAt = clock.now(),
         )
 
         repo.append(
-            StreamNames.conversation(cmd.effortId, convId),
+            StreamName.Conversation(cmd.effortId, convId),
             listOf(event),
             ExpectedVersion.NoStream,
         )
@@ -100,9 +99,9 @@ class ConversationCommandHandlerImpl(
             throw ValidationException("Invalid convId: '$rawConvId': ${e.message}")
         }
 
-        val (state, version) = loadConversation(cmd.effortId, convId)
+        val loadedState = maybeLoadConversation(cmd.effortId, convId)
 
-        if (state.convId == "") {
+        if (loadedState == null) {
             // EMPTY sentinel — conversation does not exist yet
             when (convId) {
                 is ConvId.DirectMessage -> {
@@ -116,22 +115,18 @@ class ConversationCommandHandlerImpl(
                         com.bigboote.domain.values.CollaboratorName.from("@${convId.party2}"),
                     )
                     val created = ConversationCreated(
-                        convId    = convId.value,
-                        effortId  = cmd.effortId,
-                        convName  = dmName,
-                        members   = members,
+                        convName = dmName,
+                        members = members,
                         createdAt = clock.now(),
                     )
                     val posted = MessagePosted(
                         messageId = cmd.messageId,
-                        convId    = convId.value,
-                        effortId  = cmd.effortId,
-                        from      = cmd.from,
-                        body      = cmd.body,
-                        postedAt  = clock.now(),
+                        from = cmd.from,
+                        body = cmd.body,
+                        postedAt = clock.now(),
                     )
                     repo.append(
-                        StreamNames.conversation(cmd.effortId, convId),
+                        StreamName.Conversation(cmd.effortId, convId),
                         listOf(created, posted),
                         ExpectedVersion.NoStream,
                     )
@@ -140,6 +135,7 @@ class ConversationCommandHandlerImpl(
                         convId.value, cmd.effortId
                     )
                 }
+
                 is ConvId.Channel -> {
                     throw DomainException(DomainError.ConversationNotFound(rawConvId))
                 }
@@ -148,16 +144,14 @@ class ConversationCommandHandlerImpl(
             // Conversation exists — just append the message.
             val event = MessagePosted(
                 messageId = cmd.messageId,
-                convId    = convId.value,
-                effortId  = cmd.effortId,
-                from      = cmd.from,
-                body      = cmd.body,
-                postedAt  = clock.now(),
+                from = cmd.from,
+                body = cmd.body,
+                postedAt = clock.now(),
             )
             repo.append(
-                StreamNames.conversation(cmd.effortId, convId),
+                StreamName.Conversation(cmd.effortId, convId),
                 listOf(event),
-                ExpectedVersion.Exact(version),
+                ExpectedVersion.Exact(loadedState.second),
             )
             logger.info(
                 "Message posted to {} in effort {}: {}",
@@ -177,11 +171,8 @@ class ConversationCommandHandlerImpl(
             throw ValidationException("Invalid convId: '${cmd.convId}': ${e.message}")
         }
 
-        val (state, version) = loadConversation(cmd.effortId, convId)
-
-        if (state.convId == "") {
-            throw DomainException(DomainError.ConversationNotFound(cmd.convId))
-        }
+        val (state, version) = maybeLoadConversation(cmd.effortId, convId)
+            ?: throw DomainException(DomainError.ConversationNotFound(cmd.convId))
 
         if (state.members.any { it.toString() == cmd.member.toString() }) {
             // Idempotent: member already present — no-op rather than error.
@@ -193,14 +184,12 @@ class ConversationCommandHandlerImpl(
         }
 
         val event = MemberAdded(
-            convId   = cmd.convId,
-            effortId = cmd.effortId,
-            member   = cmd.member,
-            addedAt  = clock.now(),
+            member = cmd.member,
+            addedAt = clock.now(),
         )
 
         repo.append(
-            StreamNames.conversation(cmd.effortId, convId),
+            StreamName.Conversation(cmd.effortId, convId),
             listOf(event),
             ExpectedVersion.Exact(version),
         )
@@ -212,14 +201,14 @@ class ConversationCommandHandlerImpl(
 
     // ---- private helpers ----
 
-    private suspend fun loadConversation(
+    private suspend fun maybeLoadConversation(
         effortId: EffortId,
         convId: ConvId,
-    ): Pair<ConversationState, Long> =
-        repo.load(
-            StreamNames.conversation(effortId, convId),
-            ConversationState.EMPTY,
-        ) { state, event ->
-            if (event is com.bigboote.domain.events.ConversationEvent) state.apply(event) else state
-        }
+    ) =
+        repo.maybeLoad(
+            ConversationEvent::class,
+            StreamName.Conversation(effortId, convId),
+            ConversationState::start,
+            ConversationState::apply
+        )
 }

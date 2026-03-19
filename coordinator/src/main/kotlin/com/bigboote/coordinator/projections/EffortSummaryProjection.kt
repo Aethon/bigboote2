@@ -4,12 +4,13 @@ import com.bigboote.coordinator.projections.db.EffortTable
 import com.bigboote.domain.aggregates.EffortStatus
 import com.bigboote.domain.events.EffortEvent
 import com.bigboote.domain.events.EffortEvent.*
+import com.bigboote.domain.events.asEffortStream
 import com.bigboote.domain.values.CollaboratorSpec
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.EventEnvelope
 import com.bigboote.events.eventstore.EventStore
 import com.bigboote.events.eventstore.EventSubscription
-import com.bigboote.events.streams.StreamNames
 import com.bigboote.infra.db.dbQuery
 import kotlinx.datetime.Instant
 import kotlinx.serialization.encodeToString
@@ -37,7 +38,7 @@ interface EffortSummaryProjection : Projection {
     /** Begin tracking a newly created effort stream (called from route handlers). */
     fun trackEffort(effortId: EffortId)
     /** Synchronously project one event for immediate read-your-writes consistency. */
-    suspend fun project(event: EffortEvent)
+    suspend fun project(event: EffortEvent, stream: StreamName.Effort)
 }
 
 /**
@@ -46,9 +47,9 @@ interface EffortSummaryProjection : Projection {
  * Maintains the `efforts` Postgres read model from KurrentDB effort events.
  *
  * Two delivery paths are used for correctness:
- * 1. **Direct** (`project(event)`): called synchronously from API routes immediately
- *    after appending events to KurrentDB, ensuring immediate read-your-writes consistency
- *    within a single request/response cycle.
+ * 1. **Direct** (`project(event, stream)`): called synchronously from API routes
+ *    immediately after appending events to KurrentDB, ensuring immediate
+ *    read-your-writes consistency within a single request/response cycle.
  * 2. **Subscription** (`trackEffort(id)` / `start()`): catch-up subscriptions from
  *    position 0 on each known effort stream, providing crash recovery and replay
  *    semantics. All DB writes are idempotent upserts so double-delivery is harmless.
@@ -102,8 +103,8 @@ class EffortSummaryProjectionImpl(
      * Called by API routes immediately after a new Effort is created.
      */
     override fun trackEffort(effortId: EffortId) {
-        val streamId = StreamNames.effort(effortId)
-        if (!subscriptions.containsKey(streamId)) {
+        val streamPath = StreamName.Effort(effortId).path
+        if (!subscriptions.containsKey(streamPath)) {
             subscribeToStream(effortId)
         }
     }
@@ -112,14 +113,17 @@ class EffortSummaryProjectionImpl(
      * Synchronously project a single event into the read model.
      * Called from API routes for immediate read-your-writes consistency.
      * Also called internally by the subscription handler.
+     *
+     * [stream] provides the [EffortId] context that is no longer carried in
+     * event payloads.
      */
-    override suspend fun project(event: EffortEvent) {
+    override suspend fun project(event: EffortEvent, stream: StreamName.Effort) {
         when (event) {
-            is EffortCreated -> upsertCreated(event)
-            is EffortStarted -> updateStatus(event.effortId, EffortStatus.ACTIVE, startedAt = event.occurredAt)
-            is EffortPaused -> updateStatus(event.effortId, EffortStatus.PAUSED)
-            is EffortResumed -> updateStatus(event.effortId, EffortStatus.ACTIVE)
-            is EffortClosed -> updateStatus(event.effortId, EffortStatus.CLOSED, closedAt = event.occurredAt)
+            is EffortCreated -> upsertCreated(event, stream.id)
+            is EffortStarted -> updateStatus(stream.id, EffortStatus.ACTIVE, startedAt = event.occurredAt)
+            is EffortPaused -> updateStatus(stream.id, EffortStatus.PAUSED)
+            is EffortResumed -> updateStatus(stream.id, EffortStatus.ACTIVE)
+            is EffortClosed -> updateStatus(stream.id, EffortStatus.CLOSED, closedAt = event.occurredAt)
             is AgentSpawnRequested -> { /* no-op: agent instances tracked separately in later phases */ }
         }
         processedCount.incrementAndGet()
@@ -129,11 +133,12 @@ class EffortSummaryProjectionImpl(
 
     /**
      * Handle an event envelope from the catch-up subscription.
-     * Delegates to [project] after extracting the EffortEvent.
+     * Delegates to [project] after extracting the EffortEvent and stream.
      */
-    override suspend fun handle(envelope: EventEnvelope) {
+    override suspend fun handle(envelope: EventEnvelope<Any>) {
         val event = envelope.data as? EffortEvent ?: return
-        project(event)
+        val stream = envelope.streamName.asEffortStream()
+        project(event, stream)
     }
 
     override suspend fun checkpoint(): Long = processedCount.get()
@@ -141,21 +146,21 @@ class EffortSummaryProjectionImpl(
     // ------------------------------------------------------------------ private helpers
 
     private fun subscribeToStream(effortId: EffortId) {
-        val streamId = StreamNames.effort(effortId)
-        subscriptions.computeIfAbsent(streamId) {
-            eventStore.subscribeToStream(streamId, fromVersion = 0L) { envelope ->
+        val streamName = StreamName.Effort(effortId)
+        subscriptions.computeIfAbsent(streamName.path) {
+            eventStore.subscribeToStream(streamName, fromVersion = 0L) { envelope ->
                 handle(envelope)
             }.also {
-                logger.debug("EffortSummaryProjection: started catch-up subscription on '{}'", streamId)
+                logger.debug("EffortSummaryProjection: started catch-up subscription on '{}'", streamName.path)
             }
         }
     }
 
-    private suspend fun upsertCreated(event: EffortCreated) {
+    private suspend fun upsertCreated(event: EffortCreated, effortId: EffortId) {
         val collaboratorsJson = encodeCollaborators(event.collaborators)
         dbQuery {
             EffortTable.upsert {
-                it[effortId] = event.effortId.value
+                it[EffortTable.effortId] = effortId.value
                 it[name] = event.name
                 it[goal] = event.goal
                 it[status] = EffortStatus.CREATED
@@ -164,7 +169,7 @@ class EffortSummaryProjectionImpl(
                 it[createdAt] = event.createdAt
             }
         }
-        logger.debug("EffortSummaryProjection: upserted EffortCreated for {}", event.effortId)
+        logger.debug("EffortSummaryProjection: upserted EffortCreated for {}", effortId)
     }
 
     private suspend fun updateStatus(

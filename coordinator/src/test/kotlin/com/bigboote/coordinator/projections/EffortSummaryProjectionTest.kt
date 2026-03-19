@@ -1,6 +1,7 @@
 package com.bigboote.coordinator.projections
 
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.EventEnvelope
 import com.bigboote.events.eventstore.EventStore
 import com.bigboote.events.eventstore.EventSubscription
@@ -18,6 +19,9 @@ import kotlinx.coroutines.test.runTest
  * stop propagation) and the no-op fast-path for non-EffortEvent envelopes.
  * Database-write paths (upsertCreated, updateStatus) require a real Postgres
  * instance and are covered by integration tests in a later phase.
+ *
+ * [subscribeToStream] is verified with a typed [StreamName.Effort] argument rather
+ * than a raw string — consistent with the stream-names change.
  */
 class EffortSummaryProjectionTest : DescribeSpec({
 
@@ -44,8 +48,10 @@ class EffortSummaryProjectionTest : DescribeSpec({
 
             projection.trackEffort(EffortId("effort:abc"))
 
-            // subscribeToStream called once with the correct stream id ("/effort:abc")
-            verify(exactly = 1) { eventStore.subscribeToStream("/effort:abc", 0L, any()) }
+            // subscribeToStream called once with the typed StreamName.Effort
+            verify(exactly = 1) {
+                eventStore.subscribeToStream(StreamName.Effort(EffortId("effort:abc")), 0L, any())
+            }
         }
 
         it("does not create a duplicate subscription when called twice for the same effort") {
@@ -71,8 +77,12 @@ class EffortSummaryProjectionTest : DescribeSpec({
             projection.trackEffort(EffortId("effort:aaa"))
             projection.trackEffort(EffortId("effort:bbb"))
 
-            verify(exactly = 1) { eventStore.subscribeToStream("/effort:aaa", 0L, any()) }
-            verify(exactly = 1) { eventStore.subscribeToStream("/effort:bbb", 0L, any()) }
+            verify(exactly = 1) {
+                eventStore.subscribeToStream(StreamName.Effort(EffortId("effort:aaa")), 0L, any())
+            }
+            verify(exactly = 1) {
+                eventStore.subscribeToStream(StreamName.Effort(EffortId("effort:bbb")), 0L, any())
+            }
         }
     }
 
@@ -109,7 +119,7 @@ class EffortSummaryProjectionTest : DescribeSpec({
     describe("handle with non-EffortEvent envelope") {
         it("returns without error when envelope data is not an EffortEvent") {
             val (projection, _) = makeProjection()
-            val envelope = mockk<EventEnvelope>()
+            val envelope = mockk<EventEnvelope<Any>>()
             // Return a plain String — definitely not an EffortEvent.
             // The cast `as? EffortEvent` returns null so the method exits early;
             // no dbQuery call is made, meaning no DB is needed for this assertion.

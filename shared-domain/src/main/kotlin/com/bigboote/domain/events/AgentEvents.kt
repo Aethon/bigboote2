@@ -6,15 +6,24 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
+/**
+ * Events for the Agent lifecycle stream: `/effort:{id}/agent:{id}`
+ *
+ * Both [AgentId] and [EffortId] are inherent to [StreamName.Agent] and are no longer
+ * duplicated in event payloads. Retrieve them via [StreamName.Agent.agentId] and
+ * [StreamName.Agent.effortId] from [com.bigboote.events.eventstore.EventEnvelope.streamName].
+ *
+ * [LLMRequestSent] and [LLMResponseReceived] have moved to [LoopEvent] — they are
+ * execution-scoped events that belong on the Loop stream (`/effort:{id}/agent:{id}/loop`).
+ *
+ * See Architecture doc Change Document v1.0 Section 5.2 / 5.4.
+ */
 @Serializable
 sealed interface AgentEvent {
-    val agentId: AgentId
 
     @Serializable
     @SerialName("AgentStarted")
     data class AgentStarted(
-        override val agentId: AgentId,
-        val effortId: EffortId,
         val agentTypeId: AgentTypeId,
         val collaboratorName: CollaboratorName,
         val supportedGatewayApiVersions: List<String>,
@@ -25,14 +34,12 @@ sealed interface AgentEvent {
     @Serializable
     @SerialName("AgentStopped")
     data class AgentStopped(
-        override val agentId: AgentId,
         val occurredAt: Instant,
     ) : AgentEvent
 
     @Serializable
     @SerialName("AgentFailed")
     data class AgentFailed(
-        override val agentId: AgentId,
         val reason: String,
         val failedAt: Instant,
     ) : AgentEvent
@@ -40,31 +47,12 @@ sealed interface AgentEvent {
     @Serializable
     @SerialName("AgentPaused")
     data class AgentPaused(
-        override val agentId: AgentId,
         val occurredAt: Instant,
     ) : AgentEvent
 
     @Serializable
     @SerialName("AgentResumed")
     data class AgentResumed(
-        override val agentId: AgentId,
-        val occurredAt: Instant,
-    ) : AgentEvent
-
-    @Serializable
-    @SerialName("LLMRequestSent")
-    data class LLMRequestSent(
-        override val agentId: AgentId,
-        val model: String,
-        val inputTokens: Int,
-        val occurredAt: Instant,
-    ) : AgentEvent
-
-    @Serializable
-    @SerialName("LLMResponseReceived")
-    data class LLMResponseReceived(
-        override val agentId: AgentId,
-        val outputTokens: Int,
         val occurredAt: Instant,
     ) : AgentEvent
 
@@ -74,7 +62,6 @@ sealed interface AgentEvent {
     @Serializable
     @SerialName("ToolInvoked")
     data class ToolInvoked(
-        override val agentId: AgentId,
         val toolName: String,
         val toolCallId: String,
         val parameters: JsonObject,
@@ -84,10 +71,17 @@ sealed interface AgentEvent {
     @Serializable
     @SerialName("ToolResultReceived")
     data class ToolResultReceived(
-        override val agentId: AgentId,
         val toolCallId: String,
         val result: String,
         val isError: Boolean,
         val receivedAt: Instant,
     ) : AgentEvent
 }
+
+/**
+ * Safely cast an untyped [StreamName] to [StreamName.Agent].
+ * Use this in [EventStore.subscribeToAll] handlers after a type-check on `envelope.data`.
+ */
+fun StreamName<*>.asAgentStream(): StreamName.Agent =
+    this as? StreamName.Agent
+        ?: error("Expected StreamName.Agent but got ${this::class.simpleName} for path '$path'")

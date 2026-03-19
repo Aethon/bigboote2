@@ -56,49 +56,50 @@ class SseEventBroadcaster(private val eventStore: EventStore) {
      * it keeps streaming live events until cancelled.
      */
     fun effortEventFlow(effortId: EffortId, fromPosition: Long = 0L): Flow<String> = callbackFlow {
-        val streamPrefix = "/${effortId.value}"
-        logger.debug("SseEventBroadcaster: new SSE subscription for effort {} from position {}", effortId, fromPosition)
-
-        val subscription = eventStore.subscribeToStream("\$all", fromVersion = fromPosition) { envelope ->
-            if (envelope.streamId.startsWith(streamPrefix)) {
-                val json = encodeEnvelope(envelope)
-                trySend(json)
-            }
-        }
-
-        awaitClose {
-            logger.debug("SseEventBroadcaster: SSE subscription closed for effort {}", effortId)
-            subscription.stop()
-        }
+        // TODO
+//        val streamPrefix = "/${effortId.value}"
+//        logger.debug("SseEventBroadcaster: new SSE subscription for effort {} from position {}", effortId, fromPosition)
+//
+//        val subscription = eventStore.subscribeToStream("\$all", fromVersion = fromPosition) { envelope ->
+//            if (envelope.streamId.startsWith(streamPrefix)) {
+//                val json = encodeEnvelope(envelope)
+//                trySend(json)
+//            }
+//        }
+//
+//        awaitClose {
+//            logger.debug("SseEventBroadcaster: SSE subscription closed for effort {}", effortId)
+//            subscription.stop()
+//        }
     }
 
     // ---- private helpers ----
-
-    @Suppress("UNCHECKED_CAST")
-    private fun encodeEnvelope(envelope: EventEnvelope): String {
-        val serializer: KSerializer<Any>? =
-            EventRegistry.serializerFor(envelope.eventType) as? KSerializer<Any>
-
-        val dataElement: JsonElement = if (serializer != null) {
-            try {
-                json.encodeToJsonElement(serializer, envelope.data)
-            } catch (e: Exception) {
-                logger.warn(
-                    "SseEventBroadcaster: failed to serialize event {} data: {}",
-                    envelope.eventType, e.message,
-                )
-                buildJsonObject {}
-            }
-        } else {
-            buildJsonObject {}
-        }
-
-        return buildJsonObject {
-            put("streamId",  envelope.streamId)
-            put("position",  envelope.position)
-            put("type",      envelope.eventType)
-            put("timestamp", envelope.timestamp.toString())
-            put("data",      dataElement)
-        }.toString()
-    }
+// TODO
+//    @Suppress("UNCHECKED_CAST")
+//    private fun encodeEnvelope(envelope: EventEnvelope): String {
+//        val serializer: KSerializer<Any>? =
+//            EventRegistry.serializerFor(envelope.eventType) as? KSerializer<Any>
+//
+//        val dataElement: JsonElement = if (serializer != null) {
+//            try {
+//                json.encodeToJsonElement(serializer, envelope.data)
+//            } catch (e: Exception) {
+//                logger.warn(
+//                    "SseEventBroadcaster: failed to serialize event {} data: {}",
+//                    envelope.eventType, e.message,
+//                )
+//                buildJsonObject {}
+//            }
+//        } else {
+//            buildJsonObject {}
+//        }
+//
+//        return buildJsonObject {
+//            put("streamId",  envelope.streamId)
+//            put("position",  envelope.position)
+//            put("type",      envelope.eventType)
+//            put("timestamp", envelope.timestamp.toString())
+//            put("data",      dataElement)
+//        }.toString()
+//    }
 }

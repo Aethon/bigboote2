@@ -5,6 +5,7 @@ import com.bigboote.domain.values.AgentId
 import com.bigboote.domain.values.AgentTypeId
 import com.bigboote.domain.values.CollaboratorName
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
@@ -41,7 +42,7 @@ class FlyMachineAgentProxy(
     private val httpClient: HttpClient,
 ) : AgentProxy {
 
-    override suspend fun deliverMessage(event: MessagePosted) {
+    override suspend fun deliverMessage(streamName: StreamName.Conversation, event: MessagePosted) {
         logger.debug(
             "FlyMachineAgentProxy: deliverMessage stub — agent {} would receive message {}",
             agentId, event.messageId,

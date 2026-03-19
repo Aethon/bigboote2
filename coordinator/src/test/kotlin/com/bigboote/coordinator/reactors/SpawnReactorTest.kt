@@ -21,7 +21,7 @@ import kotlinx.datetime.Instant
  * Unit tests for [SpawnReactor].
  *
  * Verifies that the reactor correctly:
- *  - Subscribes to the \$all stream on start with the expected group name.
+ *  - Subscribes to the \$all stream on start via [EventStore.subscribeToAll].
  *  - Ignores non-[AgentSpawnRequested] events.
  *  - Looks up the AgentType from the read repository.
  *  - Logs and returns early when the AgentType is not found.
@@ -30,6 +30,9 @@ import kotlinx.datetime.Instant
  *  - Calls [AgentProxy.start] with the correct parameters.
  *  - Handles spawn failures gracefully (logs, does not crash).
  *  - Stops the subscription on [SpawnReactor.stop].
+ *
+ * [EffortId] is extracted from [EventEnvelope.streamName] (via [StreamName.Effort]),
+ * not from the event payload — consistent with the stream-names change.
  *
  * No real KurrentDB, Postgres, or Docker connections are required.
  */
@@ -45,7 +48,6 @@ class SpawnReactorTest : DescribeSpec({
 
     val spawnEvent = AgentSpawnRequested(
         agentId          = agentId,
-        effortId         = effortId,
         agentTypeId      = agentTypeId,
         collaboratorName = collab,
         gatewayToken     = "gw-token-abc",
@@ -69,30 +71,34 @@ class SpawnReactorTest : DescribeSpec({
 
     // ---- helpers ----
 
-    /** Create a mock EventStore that captures the handler passed to subscribePersistent. */
-    fun mockEventStore(captureSlot: CapturingSlot<suspend (EventEnvelope) -> Unit>): EventStore {
+    /** Create a mock EventStore that captures the handler passed to subscribeToAll. */
+    fun mockEventStore(captureSlot: CapturingSlot<suspend (EventEnvelope<Any>) -> Unit>): EventStore {
         val mockSubscription = mockk<EventSubscription>(relaxed = true)
         val eventStore = mockk<EventStore>()
         every {
-            eventStore.subscribePersistent(any(), any(), capture(captureSlot))
+            eventStore.subscribeToAll(capture(captureSlot))
         } returns mockSubscription
         return eventStore
     }
 
-    fun makeEnvelope(data: Any): EventEnvelope = EventEnvelope(
-        streamId  = "test-stream",
-        eventType = data::class.simpleName ?: "Unknown",
-        position  = 0L,
-        data      = data,
-        timestamp = Instant.fromEpochMilliseconds(0),
+    /**
+     * Builds an envelope whose [streamName] is [StreamName.Effort]([effortId]),
+     * so the reactor can extract the effort context via [asEffortStream].
+     */
+    fun makeEnvelope(data: Any): EventEnvelope<Any> = EventEnvelope(
+        streamName = StreamName.Effort(effortId),
+        eventType  = data::class.simpleName ?: "Unknown",
+        position   = 0L,
+        data       = data,
+        timestamp  = Instant.fromEpochMilliseconds(0),
     )
 
     // ---- tests ----
 
     describe("SpawnReactor.start") {
 
-        it("subscribes to \$all with the spawn-reactor group") {
-            val handlerSlot = slot<suspend (EventEnvelope) -> Unit>()
+        it("subscribes to \$all on start") {
+            val handlerSlot = slot<suspend (EventEnvelope<Any>) -> Unit>()
             val eventStore = mockEventStore(handlerSlot)
             val reactor = SpawnReactor(
                 eventStore              = eventStore,
@@ -104,14 +110,14 @@ class SpawnReactorTest : DescribeSpec({
 
             reactor.start()
 
-            verify { eventStore.subscribePersistent("\$all", "spawn-reactor", any()) }
+            verify { eventStore.subscribeToAll(any()) }
         }
     }
 
     describe("SpawnReactor event handling") {
 
         it("ignores events that are not AgentSpawnRequested") {
-            val handlerSlot = slot<suspend (EventEnvelope) -> Unit>()
+            val handlerSlot = slot<suspend (EventEnvelope<Any>) -> Unit>()
             val eventStore = mockEventStore(handlerSlot)
             val agentTypeRepo = mockk<AgentTypeReadRepository>()
             val spawnStrategy = mockk<SpawnStrategy>()
@@ -133,7 +139,7 @@ class SpawnReactorTest : DescribeSpec({
         }
 
         it("looks up AgentType and calls spawn when AgentSpawnRequested is received") {
-            val handlerSlot = slot<suspend (EventEnvelope) -> Unit>()
+            val handlerSlot = slot<suspend (EventEnvelope<Any>) -> Unit>()
             val eventStore = mockEventStore(handlerSlot)
 
             val agentTypeRepo = mockk<AgentTypeReadRepository>()
@@ -184,7 +190,7 @@ class SpawnReactorTest : DescribeSpec({
         }
 
         it("logs and skips when AgentType is not found") {
-            val handlerSlot = slot<suspend (EventEnvelope) -> Unit>()
+            val handlerSlot = slot<suspend (EventEnvelope<Any>) -> Unit>()
             val eventStore = mockEventStore(handlerSlot)
 
             val agentTypeRepo = mockk<AgentTypeReadRepository>()
@@ -208,7 +214,7 @@ class SpawnReactorTest : DescribeSpec({
         }
 
         it("handles spawn failures without crashing the reactor") {
-            val handlerSlot = slot<suspend (EventEnvelope) -> Unit>()
+            val handlerSlot = slot<suspend (EventEnvelope<Any>) -> Unit>()
             val eventStore = mockEventStore(handlerSlot)
 
             val agentTypeRepo = mockk<AgentTypeReadRepository>()
@@ -238,7 +244,7 @@ class SpawnReactorTest : DescribeSpec({
         it("stops the subscription") {
             val mockSubscription = mockk<EventSubscription>(relaxed = true)
             val eventStore = mockk<EventStore>()
-            every { eventStore.subscribePersistent(any(), any(), any()) } returns mockSubscription
+            every { eventStore.subscribeToAll(any()) } returns mockSubscription
 
             val reactor = SpawnReactor(
                 eventStore              = eventStore,

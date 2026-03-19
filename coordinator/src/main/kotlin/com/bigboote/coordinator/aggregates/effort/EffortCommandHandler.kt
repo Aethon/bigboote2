@@ -5,12 +5,13 @@ import com.bigboote.domain.aggregates.EffortState
 import com.bigboote.domain.aggregates.EffortStatus
 import com.bigboote.domain.commands.EffortCommand.*
 import com.bigboote.domain.errors.DomainError
+import com.bigboote.domain.events.EffortEvent
 import com.bigboote.domain.events.EffortEvent.*
 import com.bigboote.domain.values.AgentId
 import com.bigboote.domain.values.CollaboratorType
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.ExpectedVersion
-import com.bigboote.events.streams.StreamNames
 import kotlinx.datetime.Clock
 import org.slf4j.LoggerFactory
 import java.util.UUID
@@ -50,7 +51,6 @@ class EffortCommandHandlerImpl(
      */
     override suspend fun handle(cmd: CreateEffort): EffortId {
         val event = EffortCreated(
-            effortId = cmd.effortId,
             name = cmd.name,
             goal = cmd.goal,
             collaborators = cmd.collaborators,
@@ -59,7 +59,7 @@ class EffortCommandHandlerImpl(
         )
 
         repo.append(
-            StreamNames.effort(cmd.effortId),
+            StreamName.Effort(cmd.effortId),
             listOf(event),
             ExpectedVersion.NoStream,
         )
@@ -73,12 +73,12 @@ class EffortCommandHandlerImpl(
      * each AGENT collaborator. Effort must be in CREATED status.
      */
     override suspend fun handle(cmd: StartEffort) {
-        val (state, version) = loadEffort(cmd.effortId)
+        val (state, version) = maybeLoadEffort(cmd.effortId) ?: throw DomainException(DomainError.EffortNotFound(cmd.effortId))
 
-        requireTransition(state, EffortStatus.CREATED, EffortStatus.ACTIVE)
+        requireTransition(cmd.effortId, state, EffortStatus.CREATED, EffortStatus.ACTIVE)
 
         val events = buildList {
-            add(EffortStarted(cmd.effortId, clock.now()))
+            add(EffortStarted(clock.now()))
 
             // Emit AgentSpawnRequested for each AGENT collaborator
             state.collaborators
@@ -88,7 +88,6 @@ class EffortCommandHandlerImpl(
                     add(
                         AgentSpawnRequested(
                             agentId = agentId,
-                            effortId = cmd.effortId,
                             agentTypeId = spec.agentTypeId!!,
                             collaboratorName = spec.name,
                             // DECISION: Generate tokens inline using UUID until TokenGenerator
@@ -102,7 +101,7 @@ class EffortCommandHandlerImpl(
         }
 
         repo.append(
-            StreamNames.effort(cmd.effortId),
+            StreamName.Effort(cmd.effortId),
             events,
             ExpectedVersion.Exact(version),
         )
@@ -114,13 +113,13 @@ class EffortCommandHandlerImpl(
      * Pause an active Effort. Emits [EffortPaused].
      */
     override suspend fun handle(cmd: PauseEffort) {
-        val (state, version) = loadEffort(cmd.effortId)
+        val (state, version) = maybeLoadEffort(cmd.effortId) ?: throw DomainException(DomainError.EffortNotFound(cmd.effortId))
 
-        requireTransition(state, EffortStatus.ACTIVE, EffortStatus.PAUSED)
+        requireTransition(cmd.effortId, state, EffortStatus.ACTIVE, EffortStatus.PAUSED)
 
         repo.append(
-            StreamNames.effort(cmd.effortId),
-            listOf(EffortPaused(cmd.effortId, clock.now())),
+            StreamName.Effort(cmd.effortId),
+            listOf(EffortPaused(clock.now())),
             ExpectedVersion.Exact(version),
         )
 
@@ -131,13 +130,13 @@ class EffortCommandHandlerImpl(
      * Resume a paused Effort. Emits [EffortResumed].
      */
     override suspend fun handle(cmd: ResumeEffort) {
-        val (state, version) = loadEffort(cmd.effortId)
+        val (state, version) = maybeLoadEffort(cmd.effortId) ?: throw DomainException(DomainError.EffortNotFound(cmd.effortId))
 
-        requireTransition(state, EffortStatus.PAUSED, EffortStatus.ACTIVE)
+        requireTransition(cmd.effortId, state, EffortStatus.PAUSED, EffortStatus.ACTIVE)
 
         repo.append(
-            StreamNames.effort(cmd.effortId),
-            listOf(EffortResumed(cmd.effortId, clock.now())),
+            StreamName.Effort(cmd.effortId),
+            listOf(EffortResumed(clock.now())),
             ExpectedVersion.Exact(version),
         )
 
@@ -148,7 +147,7 @@ class EffortCommandHandlerImpl(
      * Close an Effort. Emits [EffortClosed]. Can close from ACTIVE or PAUSED.
      */
     override suspend fun handle(cmd: CloseEffort) {
-        val (state, version) = loadEffort(cmd.effortId)
+        val (state, version) = maybeLoadEffort(cmd.effortId) ?: throw DomainException(DomainError.EffortNotFound(cmd.effortId))
 
         if (state.status == EffortStatus.CLOSED) {
             throw DomainException(DomainError.EffortAlreadyClosed(cmd.effortId))
@@ -160,8 +159,8 @@ class EffortCommandHandlerImpl(
         }
 
         repo.append(
-            StreamNames.effort(cmd.effortId),
-            listOf(EffortClosed(cmd.effortId, clock.now())),
+            StreamName.Effort(cmd.effortId),
+            listOf(EffortClosed(clock.now())),
             ExpectedVersion.Exact(version),
         )
 
@@ -170,23 +169,19 @@ class EffortCommandHandlerImpl(
 
     // ---- helpers ----
 
-    private suspend fun loadEffort(effortId: EffortId): Pair<EffortState, Long> {
-        val (state, version) = repo.load(
-            StreamNames.effort(effortId),
-            EffortState.EMPTY,
-        ) { s, event -> if (event is com.bigboote.domain.events.EffortEvent) s.apply(event) else s }
-
-        if (state.effortId.value == "effort:__empty__") {
-            throw DomainException(DomainError.EffortNotFound(effortId))
-        }
-
-        return state to version
+    private suspend fun maybeLoadEffort(effortId: EffortId): Pair<EffortState, Long>? {
+        return repo.maybeLoad(
+            EffortEvent::class,
+            StreamName.Effort(effortId),
+            EffortState::start,
+            EffortState::apply
+        )
     }
 
-    private fun requireTransition(state: EffortState, requiredFrom: EffortStatus, to: EffortStatus) {
+    private fun requireTransition(effortId: EffortId, state: EffortState, requiredFrom: EffortStatus, to: EffortStatus) {
         if (state.status != requiredFrom) {
             throw DomainException(
-                DomainError.InvalidEffortTransition(state.effortId, state.status, to)
+                DomainError.InvalidEffortTransition(effortId, state.status, to)
             )
         }
     }

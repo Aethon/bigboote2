@@ -18,7 +18,6 @@ class EventSerializerTest : StringSpec({
 
     "serialize produces EventData with correct eventType" {
         val event = EffortStarted(
-            effortId = EffortId("effort:test123serialize"),
             occurredAt = now,
         )
         val eventData = EventSerializer.serialize(event)
@@ -27,7 +26,6 @@ class EventSerializerTest : StringSpec({
 
     "serialize produces EventData with JSON payload containing domain fields" {
         val event = EffortCreated(
-            effortId = EffortId("effort:test123serialize"),
             name = "Test Effort",
             goal = "Test goal",
             collaborators = listOf(

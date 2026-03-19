@@ -5,8 +5,10 @@ import com.bigboote.coordinator.proxy.ProxyRegistry
 import com.bigboote.coordinator.projections.repositories.ConversationReadRepository
 import com.bigboote.domain.events.ConversationEvent.MessagePosted
 import com.bigboote.domain.values.CollaboratorName
+import com.bigboote.domain.values.ConvId
 import com.bigboote.domain.values.EffortId
 import com.bigboote.domain.values.MessageId
+import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.EventEnvelope
 import com.bigboote.events.eventstore.EventStore
 import com.bigboote.events.eventstore.EventSubscription
@@ -18,7 +20,7 @@ import kotlinx.datetime.Instant
  * Unit tests for [MessageDeliveryReactor].
  *
  * Verifies that the reactor correctly:
- *  - Subscribes to `$all` on start with the expected persistent group name.
+ *  - Subscribes to `$all` on start via [EventStore.subscribeToAll].
  *  - Ignores non-[MessagePosted] events silently.
  *  - Loads conversation members from [ConversationReadRepository].
  *  - Skips delivery when no members are found for the conversation.
@@ -28,22 +30,24 @@ import kotlinx.datetime.Instant
  *  - Handles delivery failures gracefully (logs, does not crash the reactor).
  *  - Stops the subscription on [MessageDeliveryReactor.stop].
  *
+ * [EffortId] and [ConvId] are extracted from [EventEnvelope.streamName]
+ * (via [StreamName.Conversation]), not from the event payload — consistent with
+ * the stream-names change. [getMembersForConv] is called with [ConvId.value].
+ *
  * No real KurrentDB, Postgres, or WebSocket connections are required.
  */
 class MessageDeliveryReactorTest : DescribeSpec({
 
     // ---- fixtures ----
 
-    val effortId  = EffortId("effort:test-001")
-    val convId    = "conv:#general"
+    val effortId     = EffortId("effort:test-001")
+    val convId       = ConvId.channel("general")   // value = "conv:#general"
     val senderName   = CollaboratorName.Individual("alice")
     val member1Name  = CollaboratorName.Individual("bob")
     val member2Name  = CollaboratorName.Individual("charlie")
 
     val messagePostedEvent = MessagePosted(
         messageId = MessageId("msg:test-001"),
-        convId    = convId,
-        effortId  = effortId,
         from      = senderName,
         body      = "Hello everyone!",
         postedAt  = Instant.fromEpochMilliseconds(0),
@@ -52,21 +56,25 @@ class MessageDeliveryReactorTest : DescribeSpec({
     // ---- helpers ----
 
     /** Create a mock EventStore that captures the subscription handler. */
-    fun mockEventStore(captureSlot: CapturingSlot<suspend (EventEnvelope) -> Unit>): EventStore {
+    fun mockEventStore(captureSlot: CapturingSlot<suspend (EventEnvelope<Any>) -> Unit>): EventStore {
         val mockSubscription = mockk<EventSubscription>(relaxed = true)
         val eventStore = mockk<EventStore>()
         every {
-            eventStore.subscribePersistent(any(), any(), capture(captureSlot))
+            eventStore.subscribeToAll(capture(captureSlot))
         } returns mockSubscription
         return eventStore
     }
 
-    fun makeEnvelope(data: Any): EventEnvelope = EventEnvelope(
-        streamId  = "/${effortId.value}/conv:test",
-        eventType = data::class.simpleName ?: "Unknown",
-        position  = 0L,
-        data      = data,
-        timestamp = Instant.fromEpochMilliseconds(0),
+    /**
+     * Builds an envelope with [streamName] = [StreamName.Conversation]([effortId], [convId]),
+     * so the reactor can extract effort/conv context via [asConversationStream].
+     */
+    fun makeEnvelope(data: Any): EventEnvelope<Any> = EventEnvelope(
+        streamName = StreamName.Conversation(effortId, convId),
+        eventType  = data::class.simpleName ?: "Unknown",
+        position   = 0L,
+        data       = data,
+        timestamp  = Instant.fromEpochMilliseconds(0),
     )
 
     /** Build a reactor with the provided mocks and a real (empty) ProxyRegistry by default. */
@@ -84,21 +92,21 @@ class MessageDeliveryReactorTest : DescribeSpec({
 
     describe("MessageDeliveryReactor.start") {
 
-        it("subscribes to \$all with the message-delivery-reactor group") {
-            val handlerSlot = slot<suspend (EventEnvelope) -> Unit>()
+        it("subscribes to \$all on start") {
+            val handlerSlot = slot<suspend (EventEnvelope<Any>) -> Unit>()
             val eventStore  = mockEventStore(handlerSlot)
             val reactor = makeReactor(eventStore, mockk(relaxed = true))
 
             reactor.start()
 
-            verify { eventStore.subscribePersistent("\$all", "message-delivery-reactor", any()) }
+            verify { eventStore.subscribeToAll(any()) }
         }
     }
 
     describe("MessageDeliveryReactor event handling") {
 
         it("ignores events that are not MessagePosted") {
-            val handlerSlot = slot<suspend (EventEnvelope) -> Unit>()
+            val handlerSlot = slot<suspend (EventEnvelope<Any>) -> Unit>()
             val eventStore  = mockEventStore(handlerSlot)
             val readRepo    = mockk<ConversationReadRepository>()
             val reactor     = makeReactor(eventStore, readRepo)
@@ -110,10 +118,11 @@ class MessageDeliveryReactorTest : DescribeSpec({
         }
 
         it("skips delivery when getMembersForConv returns an empty list") {
-            val handlerSlot = slot<suspend (EventEnvelope) -> Unit>()
+            val handlerSlot = slot<suspend (EventEnvelope<Any>) -> Unit>()
             val eventStore  = mockEventStore(handlerSlot)
             val readRepo    = mockk<ConversationReadRepository>()
-            coEvery { readRepo.getMembersForConv(effortId, convId) } returns emptyList()
+            // getMembersForConv takes convId as String (convId.value)
+            coEvery { readRepo.getMembersForConv(effortId, convId.value) } returns emptyList()
 
             val registry = mockk<ProxyRegistry>(relaxed = true)
             val reactor  = makeReactor(eventStore, readRepo, registry)
@@ -126,10 +135,10 @@ class MessageDeliveryReactorTest : DescribeSpec({
         }
 
         it("delivers to all members except the sender") {
-            val handlerSlot = slot<suspend (EventEnvelope) -> Unit>()
+            val handlerSlot = slot<suspend (EventEnvelope<Any>) -> Unit>()
             val eventStore  = mockEventStore(handlerSlot)
             val readRepo    = mockk<ConversationReadRepository>()
-            coEvery { readRepo.getMembersForConv(effortId, convId) } returns
+            coEvery { readRepo.getMembersForConv(effortId, convId.value) } returns
                 listOf(senderName, member1Name, member2Name)
 
             val proxy1 = mockk<CollaboratorProxy>(relaxed = true)
@@ -152,10 +161,10 @@ class MessageDeliveryReactorTest : DescribeSpec({
         }
 
         it("silently skips recipients with no registered proxy") {
-            val handlerSlot = slot<suspend (EventEnvelope) -> Unit>()
+            val handlerSlot = slot<suspend (EventEnvelope<Any>) -> Unit>()
             val eventStore  = mockEventStore(handlerSlot)
             val readRepo    = mockk<ConversationReadRepository>()
-            coEvery { readRepo.getMembersForConv(effortId, convId) } returns
+            coEvery { readRepo.getMembersForConv(effortId, convId.value) } returns
                 listOf(senderName, member1Name, member2Name)
 
             // Only member1 has a proxy; member2 is offline / not yet spawned
@@ -173,10 +182,10 @@ class MessageDeliveryReactorTest : DescribeSpec({
         }
 
         it("handles deliverMessage failures without crashing the reactor") {
-            val handlerSlot = slot<suspend (EventEnvelope) -> Unit>()
+            val handlerSlot = slot<suspend (EventEnvelope<Any>) -> Unit>()
             val eventStore  = mockEventStore(handlerSlot)
             val readRepo    = mockk<ConversationReadRepository>()
-            coEvery { readRepo.getMembersForConv(effortId, convId) } returns
+            coEvery { readRepo.getMembersForConv(effortId, convId.value) } returns
                 listOf(senderName, member1Name)
 
             val failingProxy = mockk<CollaboratorProxy>(relaxed = true)
@@ -198,10 +207,10 @@ class MessageDeliveryReactorTest : DescribeSpec({
 
     describe("MessageDeliveryReactor.stop") {
 
-        it("stops the persistent subscription") {
+        it("stops the subscription") {
             val mockSubscription = mockk<EventSubscription>(relaxed = true)
             val eventStore = mockk<EventStore>()
-            every { eventStore.subscribePersistent(any(), any(), any()) } returns mockSubscription
+            every { eventStore.subscribeToAll(any()) } returns mockSubscription
 
             val reactor = makeReactor(eventStore, mockk(relaxed = true))
             reactor.start()

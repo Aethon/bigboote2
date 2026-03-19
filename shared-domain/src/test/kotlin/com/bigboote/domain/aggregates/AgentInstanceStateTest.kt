@@ -14,8 +14,6 @@ class AgentInstanceStateTest : StringSpec({
     val effortId = EffortId("effort:test123")
 
     val startedEvent = AgentStarted(
-        agentId = agentId,
-        effortId = effortId,
         agentTypeId = AgentTypeId.of("lead-eng"),
         collaboratorName = CollaboratorName.Individual("lead-dev"),
         supportedGatewayApiVersions = listOf("v1"),
@@ -25,8 +23,6 @@ class AgentInstanceStateTest : StringSpec({
 
     "apply AgentStarted initializes state" {
         val state = AgentInstanceState.EMPTY.apply(startedEvent)
-        state.agentId shouldBe agentId
-        state.effortId shouldBe effortId
         state.status shouldBe AgentStatus.STARTED
         state.loopStatus shouldBe LoopStatus.IDLE
     }
@@ -34,14 +30,14 @@ class AgentInstanceStateTest : StringSpec({
     "apply AgentStopped transitions to STOPPED" {
         val state = AgentInstanceState.EMPTY
             .apply(startedEvent)
-            .apply(AgentStopped(agentId, now))
+            .apply(AgentStopped(now))
         state.status shouldBe AgentStatus.STOPPED
     }
 
     "apply AgentFailed transitions to FAILED and STUCK" {
         val state = AgentInstanceState.EMPTY
             .apply(startedEvent)
-            .apply(AgentFailed(agentId, "Connection refused", now))
+            .apply(AgentFailed("Connection refused", now))
         state.status shouldBe AgentStatus.FAILED
         state.loopStatus shouldBe LoopStatus.STUCK
     }
@@ -49,44 +45,44 @@ class AgentInstanceStateTest : StringSpec({
     "apply AgentPaused transitions to PAUSED" {
         val state = AgentInstanceState.EMPTY
             .apply(startedEvent)
-            .apply(AgentPaused(agentId, now))
+            .apply(AgentPaused(now))
         state.status shouldBe AgentStatus.PAUSED
     }
 
     "apply AgentResumed transitions to RESUMED" {
         val state = AgentInstanceState.EMPTY
             .apply(startedEvent)
-            .apply(AgentPaused(agentId, now))
-            .apply(AgentResumed(agentId, now))
+            .apply(AgentPaused(now))
+            .apply(AgentResumed(now))
         state.status shouldBe AgentStatus.RESUMED
     }
 
     "apply StepStarted transitions loopStatus to IN_STEP" {
         val state = AgentInstanceState.EMPTY
             .apply(startedEvent)
-            .apply(StepStarted(agentId, now))
+            .apply(StepStarted(now))
         state.loopStatus shouldBe LoopStatus.IN_STEP
     }
 
     "apply StepEnded sets loopStatus to result" {
         val state = AgentInstanceState.EMPTY
             .apply(startedEvent)
-            .apply(StepStarted(agentId, now))
-            .apply(StepEnded(agentId, LoopStatus.PENDING, now))
+            .apply(StepStarted(now))
+            .apply(StepEnded(LoopStatus.PENDING, now))
         state.loopStatus shouldBe LoopStatus.PENDING
     }
 
     "apply StepEnded with IDLE result" {
         val state = AgentInstanceState.EMPTY
             .apply(startedEvent)
-            .apply(StepStarted(agentId, now))
-            .apply(StepEnded(agentId, LoopStatus.IDLE, now))
+            .apply(StepStarted(now))
+            .apply(StepEnded(LoopStatus.IDLE, now))
         state.loopStatus shouldBe LoopStatus.IDLE
     }
 
     "LLMRequestSent does not change state" {
         val before = AgentInstanceState.EMPTY.apply(startedEvent)
-        val after = before.apply(LLMRequestSent(agentId, "claude-sonnet-4-6", 1540, now))
+        val after = before.apply(LLMRequestSent("claude-sonnet-4-6", 1540, now))
         after shouldBe before
     }
 })

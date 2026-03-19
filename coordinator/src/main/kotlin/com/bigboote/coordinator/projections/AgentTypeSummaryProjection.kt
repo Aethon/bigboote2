@@ -4,11 +4,12 @@ import com.bigboote.coordinator.projections.db.AgentTypeTable
 import com.bigboote.domain.events.AgentTypeEvent
 import com.bigboote.domain.events.AgentTypeEvent.AgentTypeCreated
 import com.bigboote.domain.events.AgentTypeEvent.AgentTypeUpdated
+import com.bigboote.domain.events.asAgentTypeStream
 import com.bigboote.domain.values.AgentTypeId
+import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.EventEnvelope
 import com.bigboote.events.eventstore.EventStore
 import com.bigboote.events.eventstore.EventSubscription
-import com.bigboote.events.streams.StreamNames
 import com.bigboote.infra.db.dbQuery
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -94,17 +95,18 @@ class AgentTypeSummaryProjectionImpl(
      * Called by API routes immediately after a new AgentType is created.
      */
     override fun trackAgentType(agentTypeId: AgentTypeId) {
-        val streamId = StreamNames.agentType(agentTypeId)
-        if (!subscriptions.containsKey(streamId)) {
+        val streamPath = StreamName.AgentType(agentTypeId).path
+        if (!subscriptions.containsKey(streamPath)) {
             subscribeToStream(agentTypeId)
         }
     }
 
     // ------------------------------------------------------------------ Projection interface
 
-    override suspend fun handle(envelope: EventEnvelope) {
+    override suspend fun handle(envelope: EventEnvelope<Any>) {
         val event = envelope.data as? AgentTypeEvent ?: return
-        project(event)
+        val stream = envelope.streamName.asAgentTypeStream()
+        project(event, stream)
     }
 
     override suspend fun checkpoint(): Long = processedCount.get()
@@ -112,28 +114,28 @@ class AgentTypeSummaryProjectionImpl(
     // ------------------------------------------------------------------ private helpers
 
     private fun subscribeToStream(agentTypeId: AgentTypeId) {
-        val streamId = StreamNames.agentType(agentTypeId)
-        subscriptions.computeIfAbsent(streamId) {
-            eventStore.subscribeToStream(streamId, fromVersion = 0L) { envelope ->
+        val streamName = StreamName.AgentType(agentTypeId)
+        subscriptions.computeIfAbsent(streamName.path) {
+            eventStore.subscribeToStream(streamName, fromVersion = 0L) { envelope ->
                 handle(envelope)
             }.also {
-                logger.debug("AgentTypeSummaryProjection: started catch-up subscription on '{}'", streamId)
+                logger.debug("AgentTypeSummaryProjection: started catch-up subscription on '{}'", streamName.path)
             }
         }
     }
 
-    private suspend fun project(event: AgentTypeEvent) {
+    private suspend fun project(event: AgentTypeEvent, stream: StreamName.AgentType) {
         when (event) {
-            is AgentTypeCreated -> upsertCreated(event)
-            is AgentTypeUpdated -> patchUpdated(event)
+            is AgentTypeCreated -> upsertCreated(event, stream.id)
+            is AgentTypeUpdated -> patchUpdated(event, stream.id)
         }
         processedCount.incrementAndGet()
     }
 
-    private suspend fun upsertCreated(event: AgentTypeCreated) {
+    private suspend fun upsertCreated(event: AgentTypeCreated, agentTypeId: AgentTypeId) {
         dbQuery {
             AgentTypeTable.upsert {
-                it[agentTypeId]   = event.agentTypeId.value
+                it[AgentTypeTable.agentTypeId] = agentTypeId.value
                 it[name]          = event.name
                 it[model]         = event.model
                 it[systemPrompt]  = event.systemPrompt
@@ -146,16 +148,16 @@ class AgentTypeSummaryProjectionImpl(
                 it[updatedAt]     = null
             }
         }
-        logger.debug("AgentTypeSummaryProjection: upserted AgentTypeCreated for {}", event.agentTypeId)
+        logger.debug("AgentTypeSummaryProjection: upserted AgentTypeCreated for {}", agentTypeId)
     }
 
     /**
      * Apply a partial update — each nullable field in [AgentTypeUpdated] is only
      * written when non-null. This preserves values that were not changed.
      */
-    private suspend fun patchUpdated(event: AgentTypeUpdated) {
+    private suspend fun patchUpdated(event: AgentTypeUpdated, agentTypeId: AgentTypeId) {
         dbQuery {
-            AgentTypeTable.update({ AgentTypeTable.agentTypeId eq event.agentTypeId.value }) { row ->
+            AgentTypeTable.update({ AgentTypeTable.agentTypeId eq agentTypeId.value }) { row ->
                 event.name?.let         { row[name]          = it }
                 event.model?.let        { row[model]         = it }
                 event.systemPrompt?.let { row[systemPrompt]  = it }
@@ -167,6 +169,6 @@ class AgentTypeSummaryProjectionImpl(
                 row[updatedAt] = event.updatedAt
             }
         }
-        logger.debug("AgentTypeSummaryProjection: patched AgentTypeUpdated for {}", event.agentTypeId)
+        logger.debug("AgentTypeSummaryProjection: patched AgentTypeUpdated for {}", agentTypeId)
     }
 }

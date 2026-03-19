@@ -14,7 +14,6 @@ class EffortEventsSerializationTest : StringSpec({
 
     "EffortCreated round-trip" {
         val event: EffortEvent = EffortCreated(
-            effortId = EffortId("effort:test123"),
             name = "Add OAuth2 support",
             goal = "Implement OAuth2 authorization code flow.",
             collaborators = listOf(
@@ -39,7 +38,6 @@ class EffortEventsSerializationTest : StringSpec({
 
     "EffortStarted round-trip" {
         val event: EffortEvent = EffortStarted(
-            effortId = EffortId("effort:test123"),
             occurredAt = now,
         )
         val encoded = json.encodeToString<EffortEvent>(event)
@@ -49,7 +47,6 @@ class EffortEventsSerializationTest : StringSpec({
 
     "EffortPaused round-trip" {
         val event: EffortEvent = EffortPaused(
-            effortId = EffortId("effort:test123"),
             occurredAt = now,
         )
         val encoded = json.encodeToString<EffortEvent>(event)
@@ -59,7 +56,6 @@ class EffortEventsSerializationTest : StringSpec({
 
     "EffortResumed round-trip" {
         val event: EffortEvent = EffortResumed(
-            effortId = EffortId("effort:test123"),
             occurredAt = now,
         )
         val encoded = json.encodeToString<EffortEvent>(event)
@@ -69,7 +65,6 @@ class EffortEventsSerializationTest : StringSpec({
 
     "EffortClosed round-trip" {
         val event: EffortEvent = EffortClosed(
-            effortId = EffortId("effort:test123"),
             occurredAt = now,
         )
         val encoded = json.encodeToString<EffortEvent>(event)
@@ -80,7 +75,6 @@ class EffortEventsSerializationTest : StringSpec({
     "AgentSpawnRequested round-trip" {
         val event: EffortEvent = AgentSpawnRequested(
             agentId = AgentId("agent:spawn123"),
-            effortId = EffortId("effort:test123"),
             agentTypeId = AgentTypeId.of("lead-eng"),
             collaboratorName = CollaboratorName.Individual("lead-dev"),
             gatewayToken = "550e8400-e29b-41d4-a716-446655440000",

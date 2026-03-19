@@ -4,12 +4,13 @@ import com.bigboote.coordinator.projections.db.ConversationTable
 import com.bigboote.coordinator.projections.db.MessageTable
 import com.bigboote.domain.events.ConversationEvent
 import com.bigboote.domain.events.ConversationEvent.*
+import com.bigboote.domain.events.asConversationStream
 import com.bigboote.domain.values.ConvId
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.EventEnvelope
 import com.bigboote.events.eventstore.EventStore
 import com.bigboote.events.eventstore.EventSubscription
-import com.bigboote.events.streams.StreamNames
 import com.bigboote.infra.db.dbQuery
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -36,7 +37,7 @@ interface ConversationProjection : Projection {
     /** Begin tracking a newly created conversation stream (called from route handlers). */
     fun trackConversation(effortId: EffortId, convId: ConvId)
     /** Synchronously project one event for immediate read-your-writes consistency. */
-    suspend fun project(event: ConversationEvent)
+    suspend fun project(event: ConversationEvent, stream: StreamName.Conversation)
 }
 
 /**
@@ -46,11 +47,14 @@ interface ConversationProjection : Projection {
  * conversation events.
  *
  * Two delivery paths:
- * 1. **Direct** (`project(event)`): called synchronously from API routes immediately
- *    after appending events to KurrentDB, ensuring immediate read-your-writes consistency.
+ * 1. **Direct** (`project(event, stream)`): called synchronously from API routes
+ *    immediately after appending events to KurrentDB, ensuring immediate
+ *    read-your-writes consistency.
  * 2. **Subscription** (`trackConversation(effortId, convId)` / `start()`): catch-up
  *    subscriptions from position 0 providing crash recovery and replay. All DB writes
  *    are idempotent upserts so double-delivery is harmless.
+ *
+ * [stream] provides [EffortId] and [ConvId] context no longer carried in event payloads.
  *
  * See Architecture doc Section 8.2.
  */
@@ -105,8 +109,8 @@ class ConversationProjectionImpl(
      * Called by API routes immediately after a new conversation is created.
      */
     override fun trackConversation(effortId: EffortId, convId: ConvId) {
-        val streamId = StreamNames.conversation(effortId, convId)
-        if (!subscriptions.containsKey(streamId)) {
+        val streamPath = StreamName.Conversation(effortId, convId).path
+        if (!subscriptions.containsKey(streamPath)) {
             subscribeToStream(effortId, convId)
         }
     }
@@ -115,21 +119,24 @@ class ConversationProjectionImpl(
      * Synchronously project a single event into the read model.
      * Called from API routes for immediate read-your-writes consistency.
      * Also called internally by the subscription handler.
+     *
+     * [stream] provides [EffortId] and [ConvId] context no longer in event payloads.
      */
-    override suspend fun project(event: ConversationEvent) {
+    override suspend fun project(event: ConversationEvent, stream: StreamName.Conversation) {
         when (event) {
-            is ConversationCreated -> upsertConversation(event)
-            is MemberAdded        -> addMember(event)
-            is MessagePosted      -> upsertMessage(event)
+            is ConversationCreated -> upsertConversation(event, stream)
+            is MemberAdded        -> addMember(event, stream)
+            is MessagePosted      -> upsertMessage(event, stream)
         }
         processedCount.incrementAndGet()
     }
 
     // ------------------------------------------------------------------ Projection interface
 
-    override suspend fun handle(envelope: EventEnvelope) {
+    override suspend fun handle(envelope: EventEnvelope<Any>) {
         val event = envelope.data as? ConversationEvent ?: return
-        project(event)
+        val stream = envelope.streamName.asConversationStream()
+        project(event, stream)
     }
 
     override suspend fun checkpoint(): Long = processedCount.get()
@@ -137,24 +144,24 @@ class ConversationProjectionImpl(
     // ------------------------------------------------------------------ private helpers
 
     private fun subscribeToStream(effortId: EffortId, convId: ConvId) {
-        val streamId = StreamNames.conversation(effortId, convId)
-        subscriptions.computeIfAbsent(streamId) {
-            eventStore.subscribeToStream(streamId, fromVersion = 0L) { envelope ->
+        val streamName = StreamName.Conversation(effortId, convId)
+        subscriptions.computeIfAbsent(streamName.path) {
+            eventStore.subscribeToStream(streamName, fromVersion = 0L) { envelope ->
                 handle(envelope)
             }.also {
                 logger.debug(
-                    "ConversationProjection: started catch-up subscription on '{}'", streamId
+                    "ConversationProjection: started catch-up subscription on '{}'", streamName.path
                 )
             }
         }
     }
 
-    private suspend fun upsertConversation(event: ConversationCreated) {
+    private suspend fun upsertConversation(event: ConversationCreated, stream: StreamName.Conversation) {
         val membersJson = json.encodeToString(event.members.map { it.toString() })
         dbQuery {
             ConversationTable.upsert {
-                it[effortId]  = event.effortId.value
-                it[convId]    = event.convId
+                it[effortId]  = stream.effortId.value
+                it[convId]    = stream.convId.value
                 it[convName]  = event.convName.toString()
                 it[members]   = membersJson
                 it[createdAt] = event.createdAt
@@ -162,19 +169,19 @@ class ConversationProjectionImpl(
         }
         logger.debug(
             "ConversationProjection: upserted ConversationCreated for {} in {}",
-            event.convId, event.effortId
+            stream.convId, stream.effortId
         )
     }
 
-    private suspend fun addMember(event: MemberAdded) {
+    private suspend fun addMember(event: MemberAdded, stream: StreamName.Conversation) {
         // Load current members, append the new one, write back.
         // Upsert semantics: if row doesn't exist yet (projection lag), we skip quietly.
         dbQuery {
             val row = ConversationTable
                 .selectAll()
                 .where {
-                    (ConversationTable.effortId eq event.effortId.value) and
-                    (ConversationTable.convId eq event.convId)
+                    (ConversationTable.effortId eq stream.effortId.value) and
+                    (ConversationTable.convId eq stream.convId.value)
                 }
                 .singleOrNull() ?: return@dbQuery
 
@@ -185,8 +192,8 @@ class ConversationProjectionImpl(
 
             val updatedJson = json.encodeToString(currentMembers + memberStr)
             ConversationTable.upsert {
-                it[effortId]  = event.effortId.value
-                it[convId]    = event.convId
+                it[effortId]  = stream.effortId.value
+                it[convId]    = stream.convId.value
                 it[convName]  = row[ConversationTable.convName]
                 it[members]   = updatedJson
                 it[createdAt] = row[ConversationTable.createdAt]
@@ -194,16 +201,16 @@ class ConversationProjectionImpl(
         }
         logger.debug(
             "ConversationProjection: member {} added to {} in {}",
-            event.member, event.convId, event.effortId
+            event.member, stream.convId, stream.effortId
         )
     }
 
-    private suspend fun upsertMessage(event: MessagePosted) {
+    private suspend fun upsertMessage(event: MessagePosted, stream: StreamName.Conversation) {
         dbQuery {
             MessageTable.upsert {
                 it[messageId] = event.messageId.value
-                it[convId]    = event.convId
-                it[effortId]  = event.effortId.value
+                it[convId]    = stream.convId.value
+                it[effortId]  = stream.effortId.value
                 it[fromName]  = event.from.toString()
                 it[body]      = event.body
                 it[postedAt]  = event.postedAt
@@ -211,7 +218,7 @@ class ConversationProjectionImpl(
         }
         logger.debug(
             "ConversationProjection: upserted MessagePosted {} in {} ({})",
-            event.messageId, event.convId, event.effortId
+            event.messageId, stream.convId, stream.effortId
         )
     }
 }

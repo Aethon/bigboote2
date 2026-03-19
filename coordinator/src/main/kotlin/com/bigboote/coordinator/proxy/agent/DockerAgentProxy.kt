@@ -5,6 +5,7 @@ import com.bigboote.domain.values.AgentId
 import com.bigboote.domain.values.AgentTypeId
 import com.bigboote.domain.values.CollaboratorName
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
@@ -43,7 +44,7 @@ class DockerAgentProxy(
      * For now, log the delivery attempt so that Phase 13 integration tests can verify
      * [com.bigboote.coordinator.reactors.MessageDeliveryReactor] invokes this method.
      */
-    override suspend fun deliverMessage(event: MessagePosted) {
+    override suspend fun deliverMessage(streamName: StreamName.Conversation, event: MessagePosted) {
         logger.debug(
             "DockerAgentProxy: deliverMessage stub — agent {} would receive message {} " +
             "(Phase 12 SSE gateway delivery pending)",

@@ -5,14 +5,21 @@ import kotlinx.datetime.Instant
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+/**
+ * Events for the Effort lifecycle stream: `/effort:{id}`
+ *
+ * The [EffortId] is no longer carried in each event payload — it is inherent in the
+ * [StreamName.Effort] stream name. Retrieve it via [StreamName.Effort.id] from the
+ * enclosing [com.bigboote.events.eventstore.EventEnvelope.streamName].
+ *
+ * See Architecture doc Change Document v1.0 Section 5.1.
+ */
 @Serializable
 sealed interface EffortEvent {
-    val effortId: EffortId
 
     @Serializable
     @SerialName("EffortCreated")
     data class EffortCreated(
-        override val effortId: EffortId,
         val name: String,
         val goal: String,
         val collaborators: List<CollaboratorSpec>,
@@ -23,28 +30,24 @@ sealed interface EffortEvent {
     @Serializable
     @SerialName("EffortStarted")
     data class EffortStarted(
-        override val effortId: EffortId,
         val occurredAt: Instant,
     ) : EffortEvent
 
     @Serializable
     @SerialName("EffortPaused")
     data class EffortPaused(
-        override val effortId: EffortId,
         val occurredAt: Instant,
     ) : EffortEvent
 
     @Serializable
     @SerialName("EffortResumed")
     data class EffortResumed(
-        override val effortId: EffortId,
         val occurredAt: Instant,
     ) : EffortEvent
 
     @Serializable
     @SerialName("EffortClosed")
     data class EffortClosed(
-        override val effortId: EffortId,
         val occurredAt: Instant,
     ) : EffortEvent
 
@@ -52,7 +55,6 @@ sealed interface EffortEvent {
     @SerialName("AgentSpawnRequested")
     data class AgentSpawnRequested(
         val agentId: AgentId,
-        override val effortId: EffortId,
         val agentTypeId: AgentTypeId,
         val collaboratorName: CollaboratorName,
         val gatewayToken: String,
@@ -60,3 +62,11 @@ sealed interface EffortEvent {
         val requestedAt: Instant,
     ) : EffortEvent
 }
+
+/**
+ * Safely cast an untyped [StreamName] to [StreamName.Effort].
+ * Use this in [EventStore.subscribeToAll] handlers after a type-check on `envelope.data`.
+ */
+fun StreamName<*>.asEffortStream(): StreamName.Effort =
+    this as? StreamName.Effort
+        ?: error("Expected StreamName.Effort but got ${this::class.simpleName} for path '$path'")

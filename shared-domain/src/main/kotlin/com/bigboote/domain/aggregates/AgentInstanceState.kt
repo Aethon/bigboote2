@@ -8,8 +8,6 @@ import com.bigboote.domain.values.*
 import kotlinx.datetime.Instant
 
 data class AgentInstanceState(
-    val agentId: AgentId,
-    val effortId: EffortId,
     val agentTypeId: AgentTypeId,
     val collaboratorName: CollaboratorName,
     val status: AgentStatus,
@@ -18,8 +16,6 @@ data class AgentInstanceState(
 ) {
     fun apply(event: AgentEvent): AgentInstanceState = when (event) {
         is AgentStarted -> AgentInstanceState(
-            agentId = event.agentId,
-            effortId = event.effortId,
             agentTypeId = event.agentTypeId,
             collaboratorName = event.collaboratorName,
             status = AgentStatus.STARTED,
@@ -30,8 +26,6 @@ data class AgentInstanceState(
         is AgentFailed -> copy(status = AgentStatus.FAILED, loopStatus = LoopStatus.STUCK)
         is AgentPaused -> copy(status = AgentStatus.PAUSED)
         is AgentResumed -> copy(status = AgentStatus.RESUMED)
-        is LLMRequestSent -> this
-        is LLMResponseReceived -> this
         is ToolInvoked -> this
         is ToolResultReceived -> this
     }
@@ -43,12 +37,12 @@ data class AgentInstanceState(
         is AssistantTurnFailed -> this
         is ToolUseRequested -> this
         is ConversationMessageReceived -> this
+        is LLMRequestSent -> this
+        is LLMResponseReceived -> this
     }
 
     companion object {
         val EMPTY = AgentInstanceState(
-            agentId = AgentId("agent:__empty__"),
-            effortId = EffortId("effort:__empty__"),
             agentTypeId = AgentTypeId.of("empty"),
             collaboratorName = CollaboratorName.Individual("__empty__"),
             status = AgentStatus.STARTED,

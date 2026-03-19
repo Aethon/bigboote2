@@ -6,7 +6,6 @@ import com.bigboote.domain.values.AgentTypeId
 import kotlinx.datetime.Instant
 
 data class AgentTypeState(
-    val agentTypeId: AgentTypeId,
     val name: String,
     val model: String,
     val systemPrompt: String,
@@ -16,20 +15,10 @@ data class AgentTypeState(
     val dockerImage: String,
     val spawnStrategy: String,
     val createdAt: Instant,
-) {
-    fun apply(event: AgentTypeEvent): AgentTypeState = when (event) {
-        is AgentTypeCreated -> AgentTypeState(
-            agentTypeId = event.agentTypeId,
-            name = event.name,
-            model = event.model,
-            systemPrompt = event.systemPrompt,
-            maxTokens = event.maxTokens,
-            temperature = event.temperature ?: 0.0,
-            tools = event.tools ?: emptyList(),
-            dockerImage = event.dockerImage,
-            spawnStrategy = event.spawnStrategy,
-            createdAt = event.createdAt,
-        )
+) : NoContextStreamState<AgentTypeEvent, AgentTypeState>() {
+    override fun apply(event: AgentTypeEvent): AgentTypeState = when (event) {
+        is AgentTypeCreated -> throw IllegalArgumentException("Already created")
+
         is AgentTypeUpdated -> copy(
             name = event.name ?: name,
             model = event.model ?: model,
@@ -42,18 +31,22 @@ data class AgentTypeState(
         )
     }
 
-    companion object {
-        val EMPTY = AgentTypeState(
-            agentTypeId = AgentTypeId.of("empty"),
-            name = "",
-            model = "",
-            systemPrompt = "",
-            maxTokens = 0,
-            temperature = 0.0,
-            tools = emptyList(),
-            dockerImage = "",
-            spawnStrategy = "",
-            createdAt = Instant.fromEpochMilliseconds(0),
-        )
+    companion object : StreamStateStarter<AgentTypeEvent, AgentTypeState> {
+        override fun start(entry: EventLogEntry<AgentTypeEvent>): AgentTypeState {
+            val event = entry.event as? AgentTypeCreated
+                ?: throw IllegalArgumentException("Must start with AgentTypeCreated event")
+            return AgentTypeState(
+                name = event.name,
+                model = event.model,
+                systemPrompt = event.systemPrompt,
+                maxTokens = event.maxTokens,
+                temperature = event.temperature ?: 0.0,
+                tools = event.tools ?: emptyList(),
+                dockerImage = event.dockerImage,
+                spawnStrategy = event.spawnStrategy,
+                createdAt = event.createdAt,
+            )
+        }
     }
 }
+
