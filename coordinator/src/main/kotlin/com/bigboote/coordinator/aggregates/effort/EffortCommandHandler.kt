@@ -9,8 +9,8 @@ import com.bigboote.domain.events.EffortEvent.*
 import com.bigboote.domain.values.AgentId
 import com.bigboote.domain.values.CollaboratorType
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.ExpectedVersion
-import com.bigboote.events.streams.StreamNames
 import kotlinx.datetime.Clock
 import org.slf4j.LoggerFactory
 import java.util.UUID
@@ -50,7 +50,6 @@ class EffortCommandHandlerImpl(
      */
     override suspend fun handle(cmd: CreateEffort): EffortId {
         val event = EffortCreated(
-            effortId = cmd.effortId,
             name = cmd.name,
             goal = cmd.goal,
             collaborators = cmd.collaborators,
@@ -59,7 +58,7 @@ class EffortCommandHandlerImpl(
         )
 
         repo.append(
-            StreamNames.effort(cmd.effortId),
+            StreamName.Effort(cmd.effortId),
             listOf(event),
             ExpectedVersion.NoStream,
         )
@@ -78,7 +77,7 @@ class EffortCommandHandlerImpl(
         requireTransition(state, EffortStatus.CREATED, EffortStatus.ACTIVE)
 
         val events = buildList {
-            add(EffortStarted(cmd.effortId, clock.now()))
+            add(EffortStarted(clock.now()))
 
             // Emit AgentSpawnRequested for each AGENT collaborator
             state.collaborators
@@ -88,7 +87,6 @@ class EffortCommandHandlerImpl(
                     add(
                         AgentSpawnRequested(
                             agentId = agentId,
-                            effortId = cmd.effortId,
                             agentTypeId = spec.agentTypeId!!,
                             collaboratorName = spec.name,
                             // DECISION: Generate tokens inline using UUID until TokenGenerator
@@ -102,7 +100,7 @@ class EffortCommandHandlerImpl(
         }
 
         repo.append(
-            StreamNames.effort(cmd.effortId),
+            StreamName.Effort(cmd.effortId),
             events,
             ExpectedVersion.Exact(version),
         )
@@ -119,8 +117,8 @@ class EffortCommandHandlerImpl(
         requireTransition(state, EffortStatus.ACTIVE, EffortStatus.PAUSED)
 
         repo.append(
-            StreamNames.effort(cmd.effortId),
-            listOf(EffortPaused(cmd.effortId, clock.now())),
+            StreamName.Effort(cmd.effortId),
+            listOf(EffortPaused(clock.now())),
             ExpectedVersion.Exact(version),
         )
 
@@ -136,8 +134,8 @@ class EffortCommandHandlerImpl(
         requireTransition(state, EffortStatus.PAUSED, EffortStatus.ACTIVE)
 
         repo.append(
-            StreamNames.effort(cmd.effortId),
-            listOf(EffortResumed(cmd.effortId, clock.now())),
+            StreamName.Effort(cmd.effortId),
+            listOf(EffortResumed(clock.now())),
             ExpectedVersion.Exact(version),
         )
 
@@ -160,8 +158,8 @@ class EffortCommandHandlerImpl(
         }
 
         repo.append(
-            StreamNames.effort(cmd.effortId),
-            listOf(EffortClosed(cmd.effortId, clock.now())),
+            StreamName.Effort(cmd.effortId),
+            listOf(EffortClosed(clock.now())),
             ExpectedVersion.Exact(version),
         )
 
@@ -172,7 +170,7 @@ class EffortCommandHandlerImpl(
 
     private suspend fun loadEffort(effortId: EffortId): Pair<EffortState, Long> {
         val (state, version) = repo.load(
-            StreamNames.effort(effortId),
+            StreamName.Effort(effortId),
             EffortState.EMPTY,
         ) { s, event -> if (event is com.bigboote.domain.events.EffortEvent) s.apply(event) else s }
 

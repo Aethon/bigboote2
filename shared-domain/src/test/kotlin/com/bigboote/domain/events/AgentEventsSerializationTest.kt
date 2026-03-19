@@ -17,8 +17,6 @@ class AgentEventsSerializationTest : StringSpec({
 
     "AgentStarted round-trip" {
         val event: AgentEvent = AgentStarted(
-            agentId = agentId,
-            effortId = EffortId("effort:test123"),
             agentTypeId = AgentTypeId.of("lead-eng"),
             collaboratorName = CollaboratorName.Individual("lead-dev"),
             supportedGatewayApiVersions = listOf("v1"),
@@ -31,7 +29,7 @@ class AgentEventsSerializationTest : StringSpec({
     }
 
     "AgentStopped round-trip" {
-        val event: AgentEvent = AgentStopped(agentId = agentId, occurredAt = now)
+        val event: AgentEvent = AgentStopped(occurredAt = now)
         val encoded = json.encodeToString<AgentEvent>(event)
         val decoded = json.decodeFromString<AgentEvent>(encoded)
         decoded shouldBe event
@@ -39,7 +37,6 @@ class AgentEventsSerializationTest : StringSpec({
 
     "AgentFailed round-trip" {
         val event: AgentEvent = AgentFailed(
-            agentId = agentId,
             reason = "Connection refused",
             failedAt = now,
         )
@@ -49,37 +46,14 @@ class AgentEventsSerializationTest : StringSpec({
     }
 
     "AgentPaused round-trip" {
-        val event: AgentEvent = AgentPaused(agentId = agentId, occurredAt = now)
+        val event: AgentEvent = AgentPaused(occurredAt = now)
         val encoded = json.encodeToString<AgentEvent>(event)
         val decoded = json.decodeFromString<AgentEvent>(encoded)
         decoded shouldBe event
     }
 
     "AgentResumed round-trip" {
-        val event: AgentEvent = AgentResumed(agentId = agentId, occurredAt = now)
-        val encoded = json.encodeToString<AgentEvent>(event)
-        val decoded = json.decodeFromString<AgentEvent>(encoded)
-        decoded shouldBe event
-    }
-
-    "LLMRequestSent round-trip" {
-        val event: AgentEvent = LLMRequestSent(
-            agentId = agentId,
-            model = "claude-sonnet-4-6",
-            inputTokens = 1540,
-            occurredAt = now,
-        )
-        val encoded = json.encodeToString<AgentEvent>(event)
-        val decoded = json.decodeFromString<AgentEvent>(encoded)
-        decoded shouldBe event
-    }
-
-    "LLMResponseReceived round-trip" {
-        val event: AgentEvent = LLMResponseReceived(
-            agentId = agentId,
-            outputTokens = 312,
-            occurredAt = now,
-        )
+        val event: AgentEvent = AgentResumed(occurredAt = now)
         val encoded = json.encodeToString<AgentEvent>(event)
         val decoded = json.decodeFromString<AgentEvent>(encoded)
         decoded shouldBe event
@@ -87,7 +61,6 @@ class AgentEventsSerializationTest : StringSpec({
 
     "ToolInvoked round-trip" {
         val event: AgentEvent = ToolInvoked(
-            agentId = agentId,
             toolName = "run_command",
             toolCallId = "toolu_01ABC",
             parameters = buildJsonObject { put("command", "cat src/auth/oauth.kt") },
@@ -100,7 +73,6 @@ class AgentEventsSerializationTest : StringSpec({
 
     "ToolResultReceived round-trip" {
         val event: AgentEvent = ToolResultReceived(
-            agentId = agentId,
             toolCallId = "toolu_01ABC",
             result = "file contents here",
             isError = false,

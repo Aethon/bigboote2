@@ -13,7 +13,6 @@ class EffortStateTest : StringSpec({
     val lead = CollaboratorName.Individual("lead-dev")
 
     val createdEvent = EffortCreated(
-        effortId = effortId,
         name = "Test Effort",
         goal = "Build something",
         collaborators = listOf(
@@ -25,7 +24,6 @@ class EffortStateTest : StringSpec({
 
     "apply EffortCreated initializes state" {
         val state = EffortState.EMPTY.apply(createdEvent)
-        state.effortId shouldBe effortId
         state.name shouldBe "Test Effort"
         state.goal shouldBe "Build something"
         state.status shouldBe EffortStatus.CREATED
@@ -37,7 +35,7 @@ class EffortStateTest : StringSpec({
     "apply EffortStarted transitions to ACTIVE" {
         val state = EffortState.EMPTY
             .apply(createdEvent)
-            .apply(EffortStarted(effortId, now))
+            .apply(EffortStarted(now))
         state.status shouldBe EffortStatus.ACTIVE
         state.version shouldBe 2
     }
@@ -45,8 +43,8 @@ class EffortStateTest : StringSpec({
     "apply EffortPaused transitions to PAUSED" {
         val state = EffortState.EMPTY
             .apply(createdEvent)
-            .apply(EffortStarted(effortId, now))
-            .apply(EffortPaused(effortId, now))
+            .apply(EffortStarted(now))
+            .apply(EffortPaused(now))
         state.status shouldBe EffortStatus.PAUSED
         state.version shouldBe 3
     }
@@ -54,9 +52,9 @@ class EffortStateTest : StringSpec({
     "apply EffortResumed transitions to ACTIVE not RESUMED" {
         val state = EffortState.EMPTY
             .apply(createdEvent)
-            .apply(EffortStarted(effortId, now))
-            .apply(EffortPaused(effortId, now))
-            .apply(EffortResumed(effortId, now))
+            .apply(EffortStarted(now))
+            .apply(EffortPaused(now))
+            .apply(EffortResumed(now))
         state.status shouldBe EffortStatus.ACTIVE
         state.version shouldBe 4
     }
@@ -64,8 +62,8 @@ class EffortStateTest : StringSpec({
     "apply EffortClosed transitions to CLOSED" {
         val state = EffortState.EMPTY
             .apply(createdEvent)
-            .apply(EffortStarted(effortId, now))
-            .apply(EffortClosed(effortId, now))
+            .apply(EffortStarted(now))
+            .apply(EffortClosed(now))
         state.status shouldBe EffortStatus.CLOSED
         state.version shouldBe 3
     }
@@ -73,11 +71,10 @@ class EffortStateTest : StringSpec({
     "apply AgentSpawnRequested bumps version but does not change state" {
         val started = EffortState.EMPTY
             .apply(createdEvent)
-            .apply(EffortStarted(effortId, now))
+            .apply(EffortStarted(now))
         val afterSpawn = started.apply(
             AgentSpawnRequested(
                 agentId = AgentId("agent:spawn1"),
-                effortId = effortId,
                 agentTypeId = AgentTypeId.of("lead-eng"),
                 collaboratorName = lead,
                 gatewayToken = "gw-token",
@@ -93,10 +90,10 @@ class EffortStateTest : StringSpec({
     "full lifecycle: CREATED -> ACTIVE -> PAUSED -> ACTIVE -> CLOSED" {
         val events = listOf(
             createdEvent,
-            EffortStarted(effortId, now),
-            EffortPaused(effortId, now),
-            EffortResumed(effortId, now),
-            EffortClosed(effortId, now),
+            EffortStarted(now),
+            EffortPaused(now),
+            EffortResumed(now),
+            EffortClosed(now),
         )
         val finalState = events.fold(EffortState.EMPTY) { state, event -> state.apply(event) }
         finalState.status shouldBe EffortStatus.CLOSED

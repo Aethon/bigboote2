@@ -10,8 +10,8 @@ import com.bigboote.domain.events.AgentTypeEvent
 import com.bigboote.domain.events.AgentTypeEvent.AgentTypeCreated
 import com.bigboote.domain.events.AgentTypeEvent.AgentTypeUpdated
 import com.bigboote.domain.values.AgentTypeId
+import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.ExpectedVersion
-import com.bigboote.events.streams.StreamNames
 import kotlinx.datetime.Clock
 import org.slf4j.LoggerFactory
 
@@ -59,7 +59,6 @@ class AgentTypeCommandHandlerImpl(
      */
     override suspend fun handle(cmd: CreateAgentType): AgentTypeId {
         val event = AgentTypeCreated(
-            agentTypeId   = cmd.agentTypeId,
             name          = cmd.name,
             model         = cmd.model,
             systemPrompt  = cmd.systemPrompt,
@@ -72,7 +71,7 @@ class AgentTypeCommandHandlerImpl(
         )
 
         repo.append(
-            StreamNames.agentType(cmd.agentTypeId),
+            StreamName.AgentType(cmd.agentTypeId),
             listOf(event),
             ExpectedVersion.NoStream,
         )
@@ -95,7 +94,6 @@ class AgentTypeCommandHandlerImpl(
         val (_, version) = loadAgentType(cmd.agentTypeId)
 
         val event = AgentTypeUpdated(
-            agentTypeId   = cmd.agentTypeId,
             name          = cmd.name,
             model         = cmd.model,
             systemPrompt  = cmd.systemPrompt,
@@ -108,7 +106,7 @@ class AgentTypeCommandHandlerImpl(
         )
 
         repo.append(
-            StreamNames.agentType(cmd.agentTypeId),
+            StreamName.AgentType(cmd.agentTypeId),
             listOf(event),
             ExpectedVersion.Exact(version),
         )
@@ -120,15 +118,10 @@ class AgentTypeCommandHandlerImpl(
 
     private suspend fun loadAgentType(agentTypeId: AgentTypeId): Pair<AgentTypeState, Long> {
         val (state, version) = repo.load(
-            StreamNames.agentType(agentTypeId),
+            StreamName.AgentType(agentTypeId),
             AgentTypeState.EMPTY,
         ) { s, event ->
             if (event is AgentTypeEvent) s.apply(event) else s
-        }
-
-        // Sentinel check: EMPTY has agentTypeId "agenttype:empty"
-        if (state.agentTypeId.value == "agenttype:empty") {
-            throw DomainException(DomainError.AgentTypeNotFound(agentTypeId))
         }
 
         return state to version

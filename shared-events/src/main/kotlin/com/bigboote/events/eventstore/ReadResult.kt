@@ -7,6 +7,6 @@ package com.bigboote.events.eventstore
  * @param lastStreamPosition The position of the last event read, or -1 if the stream is empty.
  */
 data class ReadResult(
-    val events: List<EventEnvelope>,
+    val events: List<EventEnvelope<Any>>,
     val lastStreamPosition: Long,
 )

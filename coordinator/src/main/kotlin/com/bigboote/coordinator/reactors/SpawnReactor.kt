@@ -5,6 +5,8 @@ import com.bigboote.coordinator.proxy.spawn.SpawnConfig
 import com.bigboote.coordinator.proxy.spawn.SpawnStrategy
 import com.bigboote.coordinator.projections.repositories.AgentTypeReadRepository
 import com.bigboote.domain.events.EffortEvent.AgentSpawnRequested
+import com.bigboote.domain.events.asEffortStream
+import com.bigboote.domain.values.EffortId
 import com.bigboote.events.eventstore.EventStore
 import com.bigboote.events.eventstore.EventSubscription
 import org.slf4j.LoggerFactory
@@ -14,18 +16,22 @@ private val logger = LoggerFactory.getLogger(SpawnReactor::class.java)
 /**
  * Reacts to [AgentSpawnRequested] events from KurrentDB and spawns agent containers.
  *
- * Uses a persistent subscription on `\$all` so that spawn events are processed
- * at-least-once with durable acknowledgement across coordinator restarts.
+ * Uses [EventStore.subscribeToAll] so that spawn events are processed at-least-once
+ * across coordinator restarts.
  *
  * **Processing flow:**
- * 1. Receive [AgentSpawnRequested] via persistent subscription.
- * 2. Look up the AgentType read model to retrieve the Docker image.
- * 3. Build [SpawnConfig] from the event and read model.
- * 4. Call [SpawnStrategy.spawn] to start the container and obtain an [AgentProxy][com.bigboote.coordinator.proxy.agent.AgentProxy].
- * 5. Register the proxy in [ProxyRegistry].
- * 6. Call [AgentProxy.start][com.bigboote.coordinator.proxy.agent.AgentProxy.start] to send the agent its Effort context and Gateway URL.
+ * 1. Receive [AgentSpawnRequested] via \$all subscription.
+ * 2. Extract [EffortId] from [envelope.streamName][com.bigboote.events.eventstore.EventEnvelope.streamName]
+ *    via [asEffortStream].
+ * 3. Look up the AgentType read model to retrieve the Docker image.
+ * 4. Build [SpawnConfig] from the event and read model.
+ * 5. Call [SpawnStrategy.spawn] to start the container and obtain an
+ *    [AgentProxy][com.bigboote.coordinator.proxy.agent.AgentProxy].
+ * 6. Register the proxy in [ProxyRegistry].
+ * 7. Call [AgentProxy.start][com.bigboote.coordinator.proxy.agent.AgentProxy.start] to send
+ *    the agent its Effort context and Gateway URL.
  *
- * Non-[AgentSpawnRequested] events from `\$all` are silently ignored.
+ * Non-[AgentSpawnRequested] events from \$all are silently ignored.
  * Spawn failures are logged but do not crash the reactor.
  *
  * [coordinatorGatewayUrl] is the base URL of the coordinator's internal (gateway) API
@@ -45,24 +51,22 @@ class SpawnReactor(
     private var subscription: EventSubscription? = null
 
     /**
-     * Start the persistent subscription on `\$all`.
+     * Start the \$all catch-up subscription.
      * Called once by [ReactorRunner] at coordinator startup.
      */
     fun start() {
-        subscription = eventStore.subscribePersistent(
-            streamId  = "\$all",
-            groupName = "spawn-reactor",
-        ) { envelope ->
+        subscription = eventStore.subscribeToAll { envelope ->
             val event = envelope.data
             if (event is AgentSpawnRequested) {
-                handleSpawnRequested(event)
+                val effortId = envelope.streamName.asEffortStream().id
+                handleSpawnRequested(event, effortId)
             }
         }
-        logger.info("SpawnReactor started (persistent subscription on \$all, group=spawn-reactor)")
+        logger.info("SpawnReactor started (\$all catch-up subscription)")
     }
 
     /**
-     * Stop the persistent subscription.
+     * Stop the subscription.
      * Called by [ReactorRunner] on coordinator shutdown.
      */
     fun stop() {
@@ -73,10 +77,10 @@ class SpawnReactor(
 
     // ---- private helpers ----
 
-    private suspend fun handleSpawnRequested(event: AgentSpawnRequested) {
+    private suspend fun handleSpawnRequested(event: AgentSpawnRequested, effortId: EffortId) {
         logger.info(
             "SpawnReactor: AgentSpawnRequested for agent {} ({}) in effort {}",
-            event.agentId, event.collaboratorName, event.effortId,
+            event.agentId, event.collaboratorName, effortId,
         )
 
         // Look up AgentType to get dockerImage (read from Postgres read model)
@@ -91,7 +95,7 @@ class SpawnReactor(
 
         val config = SpawnConfig(
             agentId          = event.agentId,
-            effortId         = event.effortId,
+            effortId         = effortId,
             agentTypeId      = event.agentTypeId,
             collaboratorName = event.collaboratorName,
             gatewayToken     = event.gatewayToken,
@@ -101,8 +105,8 @@ class SpawnReactor(
 
         try {
             val proxy = spawnStrategy.spawn(config)
-            proxyRegistry.register(event.effortId, event.collaboratorName, proxy)
-            val startResponse = proxy.start(event.effortId, event.agentTypeId, coordinatorGatewayUrl)
+            proxyRegistry.register(effortId, event.collaboratorName, proxy)
+            val startResponse = proxy.start(effortId, event.agentTypeId, coordinatorGatewayUrl)
             logger.info(
                 "SpawnReactor: agent {} started successfully (started={})",
                 event.agentId, startResponse.started,

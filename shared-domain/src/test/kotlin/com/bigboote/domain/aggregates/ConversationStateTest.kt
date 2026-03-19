@@ -10,11 +10,8 @@ import kotlinx.datetime.Clock
 class ConversationStateTest : StringSpec({
 
     val now = Clock.System.now()
-    val effortId = EffortId("effort:test123")
 
     val createdEvent = ConversationCreated(
-        convId = "conv:#review",
-        effortId = effortId,
         convName = CollaboratorName.Channel("review"),
         members = listOf(
             CollaboratorName.Individual("lead-dev"),
@@ -25,15 +22,13 @@ class ConversationStateTest : StringSpec({
 
     "apply ConversationCreated initializes state" {
         val state = ConversationState.EMPTY.apply(createdEvent)
-        state.convId shouldBe "conv:#review"
-        state.effortId shouldBe effortId
         state.members.size shouldBe 2
     }
 
     "apply MemberAdded appends member" {
         val state = ConversationState.EMPTY
             .apply(createdEvent)
-            .apply(MemberAdded("conv:#review", effortId, CollaboratorName.Individual("new-reviewer"), now))
+            .apply(MemberAdded(CollaboratorName.Individual("new-reviewer"), now))
         state.members.size shouldBe 3
         state.members shouldContain CollaboratorName.Individual("new-reviewer")
     }
@@ -43,8 +38,6 @@ class ConversationStateTest : StringSpec({
         val after = before.apply(
             MessagePosted(
                 messageId = MessageId("msg:test1"),
-                convId = "conv:#review",
-                effortId = effortId,
                 from = CollaboratorName.Individual("alice"),
                 body = "Hello",
                 postedAt = now,

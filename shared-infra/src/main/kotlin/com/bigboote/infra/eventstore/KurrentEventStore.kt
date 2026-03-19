@@ -1,5 +1,6 @@
 package com.bigboote.infra.eventstore
 
+import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.AppendResult
 import com.bigboote.events.eventstore.EventEnvelope
 import com.bigboote.events.eventstore.EventStore
@@ -12,13 +13,14 @@ import com.eventstore.dbclient.AppendToStreamOptions
 import com.eventstore.dbclient.EventStoreDBClient
 import com.eventstore.dbclient.EventStoreDBPersistentSubscriptionsClient
 import com.eventstore.dbclient.ExpectedRevision
-import com.eventstore.dbclient.ReadStreamOptions
-import com.eventstore.dbclient.ResolvedEvent
-import com.eventstore.dbclient.SubscribeToStreamOptions
 import com.eventstore.dbclient.NackAction
 import com.eventstore.dbclient.PersistentSubscription
 import com.eventstore.dbclient.PersistentSubscriptionListener
+import com.eventstore.dbclient.ReadStreamOptions
+import com.eventstore.dbclient.ResolvedEvent
 import com.eventstore.dbclient.Subscription
+import com.eventstore.dbclient.SubscribeToAllOptions
+import com.eventstore.dbclient.SubscribeToStreamOptions
 import com.eventstore.dbclient.SubscriptionListener
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,11 +31,16 @@ import kotlinx.datetime.Instant
 import org.slf4j.LoggerFactory
 
 /**
- * KurrentDB implementation of the EventStore interface.
+ * KurrentDB implementation of the [EventStore] interface.
  *
  * Delegates to the com.eventstore:db-client-java client (v5.x).
  * Serialization/deserialization is handled by EventSerializer and EventDeserializer
  * from shared-events.
+ *
+ * Stream names are typed [StreamName] instances; the [StreamName.path] property is
+ * used as the raw KurrentDB stream ID on the wire.
+ *
+ * See Architecture doc Change Document v1.0 Section 6.
  */
 class KurrentEventStore(
     private val client: EventStoreDBClient,
@@ -43,13 +50,14 @@ class KurrentEventStore(
     private val logger = LoggerFactory.getLogger(KurrentEventStore::class.java)
     private val subscriptionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    override suspend fun appendToStream(
-        streamId: String,
-        events: List<Any>,
+    @Suppress("UNCHECKED_CAST")
+    override suspend fun <E : Any> appendToStream(
+        streamName: StreamName<E>,
+        events: List<E>,
         expectedVersion: ExpectedVersion,
     ): AppendResult {
-        val eventDataList = events.map { EventSerializer.serialize(it) }
-            .toTypedArray()
+        val streamId = streamName.path
+        val eventDataList = events.map { EventSerializer.serialize(it) }.toTypedArray()
 
         val options = AppendToStreamOptions.get()
             .expectedRevision(expectedVersion.toExpectedRevision())
@@ -66,10 +74,11 @@ class KurrentEventStore(
     }
 
     override suspend fun readStreamForward(
-        streamId: String,
+        streamName: StreamName<*>,
         fromVersion: Long,
         maxCount: Int,
     ): ReadResult {
+        val streamId = streamName.path
         val options = ReadStreamOptions.get()
             .forwards()
             .fromRevision(fromVersion)
@@ -86,28 +95,31 @@ class KurrentEventStore(
         }
 
         val events = readResult.events
-        val envelopes = events.map { it.toEventEnvelope(streamId) }
+        val envelopes = events.map { it.toEventEnvelope(streamName) }
         val lastPosition = if (events.isEmpty()) -1L
             else events.last().originalEvent.revision
 
         return ReadResult(events = envelopes, lastStreamPosition = lastPosition)
     }
 
-    override fun subscribeToStream(
-        streamId: String,
+    override fun <E : Any> subscribeToStream(
+        streamName: StreamName<E>,
         fromVersion: Long,
-        handler: suspend (EventEnvelope) -> Unit,
+        handler: suspend (EventEnvelope<E>) -> Unit,
     ): EventSubscription {
-        val options = SubscribeToStreamOptions.get()
-            .fromRevision(fromVersion)
+        val streamId = streamName.path
+        val options = SubscribeToStreamOptions.get().fromRevision(fromVersion)
 
         val listener = object : SubscriptionListener() {
             override fun onEvent(subscription: Subscription, event: ResolvedEvent) {
                 subscriptionScope.launch {
                     try {
-                        handler(event.toEventEnvelope(streamId))
+                        @Suppress("UNCHECKED_CAST")
+                        handler(event.toEventEnvelope(streamName) as EventEnvelope<E>)
                     } catch (e: Exception) {
-                        logger.error("Error processing event in catch-up subscription on '{}'", streamId, e)
+                        logger.error(
+                            "Error processing event in catch-up subscription on '{}'", streamId, e
+                        )
                     }
                 }
             }
@@ -127,16 +139,22 @@ class KurrentEventStore(
         return KurrentEventSubscription(subscription)
     }
 
-    override fun subscribePersistent(
-        streamId: String,
+    override fun <E : Any> subscribePersistent(
+        streamName: StreamName<E>,
         groupName: String,
-        handler: suspend (EventEnvelope) -> Unit,
+        handler: suspend (EventEnvelope<E>) -> Unit,
     ): EventSubscription {
+        val streamId = streamName.path
         val listener = object : PersistentSubscriptionListener() {
-            override fun onEvent(subscription: PersistentSubscription, retryCount: Int, event: ResolvedEvent) {
+            override fun onEvent(
+                subscription: PersistentSubscription,
+                retryCount: Int,
+                event: ResolvedEvent,
+            ) {
                 subscriptionScope.launch {
                     try {
-                        handler(event.toEventEnvelope(streamId))
+                        @Suppress("UNCHECKED_CAST")
+                        handler(event.toEventEnvelope(streamName) as EventEnvelope<E>)
                         subscription.ack(event)
                     } catch (e: Exception) {
                         logger.error(
@@ -151,8 +169,7 @@ class KurrentEventStore(
             override fun onCancelled(subscription: PersistentSubscription?, throwable: Throwable?) {
                 if (throwable != null) {
                     logger.error(
-                        "Persistent subscription '{}' error on stream '{}'",
-                        groupName, streamId, throwable
+                        "Persistent subscription '{}' error on stream '{}'", groupName, streamId, throwable
                     )
                 } else {
                     logger.info("Persistent subscription '{}' on stream '{}' cancelled", groupName, streamId)
@@ -166,11 +183,72 @@ class KurrentEventStore(
         return PersistentEventSubscription(subscription)
     }
 
-    private fun ResolvedEvent.toEventEnvelope(streamId: String): EventEnvelope {
+    override fun subscribeToAll(
+        handler: suspend (EventEnvelope<Any>) -> Unit,
+    ): EventSubscription {
+        val options = SubscribeToAllOptions.get().fromStart()
+
+        val listener = object : SubscriptionListener() {
+            override fun onEvent(subscription: Subscription, event: ResolvedEvent) {
+                // Skip KurrentDB system events (prefixed with $)
+                val streamId = event.originalEvent.streamId
+                if (streamId.startsWith("\$")) return
+
+                subscriptionScope.launch {
+                    try {
+                        handler(event.toEventEnvelopeFromAll())
+                    } catch (e: Exception) {
+                        logger.error(
+                            "Error processing event in \$all subscription (stream='{}')", streamId, e
+                        )
+                    }
+                }
+            }
+
+            override fun onCancelled(subscription: Subscription?, throwable: Throwable?) {
+                if (throwable != null) {
+                    logger.error("Catch-up \$all subscription error", throwable)
+                } else {
+                    logger.info("Catch-up \$all subscription cancelled")
+                }
+            }
+        }
+
+        val subscription = client.subscribeToAll(listener, options).get()
+
+        logger.info("Started catch-up \$all subscription")
+        return KurrentEventSubscription(subscription)
+    }
+
+    // ---- Private helpers ----------------------------------------------------------------
+
+    /**
+     * Convert a [ResolvedEvent] to an [EventEnvelope] for a known typed stream.
+     * The [streamName] carries the contextual identity (effortId, agentId, etc.).
+     */
+    private fun ResolvedEvent.toEventEnvelope(streamName: StreamName<*>): EventEnvelope<Any> {
         val recorded = this.originalEvent
         val data = EventDeserializer.deserialize(recorded)
         return EventEnvelope(
-            streamId = streamId,
+            streamName = streamName,
+            eventType = recorded.eventType,
+            position = recorded.revision,
+            data = data,
+            timestamp = Instant.fromEpochMilliseconds(recorded.created.toEpochMilli()),
+        )
+    }
+
+    /**
+     * Convert a [ResolvedEvent] from a `\$all` subscription to an [EventEnvelope].
+     * Parses the stream name from [ResolvedEvent.originalEvent.streamId] via [StreamName.parse].
+     * Unknown/system stream paths are silently skipped at the [subscribeToAll] call site.
+     */
+    private fun ResolvedEvent.toEventEnvelopeFromAll(): EventEnvelope<Any> {
+        val recorded = this.originalEvent
+        val streamName = StreamName.parse(recorded.streamId)
+        val data = EventDeserializer.deserialize(recorded)
+        return EventEnvelope(
+            streamName = streamName,
             eventType = recorded.eventType,
             position = recorded.revision,
             data = data,
@@ -186,7 +264,7 @@ class KurrentEventStore(
 }
 
 /**
- * Wraps a KurrentDB catch-up Subscription as an EventSubscription.
+ * Wraps a KurrentDB catch-up [Subscription] as an [EventSubscription].
  */
 private class KurrentEventSubscription(
     private val subscription: Subscription,
@@ -197,7 +275,7 @@ private class KurrentEventSubscription(
 }
 
 /**
- * Wraps a KurrentDB PersistentSubscription as an EventSubscription.
+ * Wraps a KurrentDB [PersistentSubscription] as an [EventSubscription].
  */
 private class PersistentEventSubscription(
     private val subscription: PersistentSubscription,

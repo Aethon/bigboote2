@@ -2,8 +2,10 @@ package com.bigboote.coordinator.reactors
 
 import com.bigboote.coordinator.proxy.ProxyRegistry
 import com.bigboote.coordinator.proxy.agent.AgentProxy
-import com.bigboote.domain.events.EffortEvent
-import com.bigboote.domain.events.EffortEvent.*
+import com.bigboote.domain.events.EffortEvent.EffortClosed
+import com.bigboote.domain.events.EffortEvent.EffortPaused
+import com.bigboote.domain.events.EffortEvent.EffortResumed
+import com.bigboote.domain.events.asEffortStream
 import com.bigboote.domain.values.EffortId
 import com.bigboote.events.eventstore.EventStore
 import com.bigboote.events.eventstore.EventSubscription
@@ -15,9 +17,11 @@ private val logger = LoggerFactory.getLogger(EffortLifecycleReactor::class.java)
  * Reacts to Effort lifecycle events and forwards control signals to all registered
  * [AgentProxy] instances for the affected effort.
  *
- * Uses a persistent subscription on `\$all` (group: `effort-lifecycle-reactor`).
- * On each lifecycle event the reactor looks up all [AgentProxy] entries in
- * [ProxyRegistry] for the effort and calls the corresponding control method:
+ * Uses [EventStore.subscribeToAll] for at-least-once delivery across coordinator
+ * restarts. On each lifecycle event the reactor extracts the [EffortId] from
+ * [envelope.streamName][com.bigboote.events.eventstore.EventEnvelope.streamName]
+ * via [asEffortStream], looks up all [AgentProxy] entries in [ProxyRegistry] for
+ * that effort, and calls the corresponding control method:
  *
  * - [EffortPaused]  → [AgentProxy.pause] on each agent
  * - [EffortResumed] → [AgentProxy.resume] on each agent
@@ -38,28 +42,23 @@ class EffortLifecycleReactor(
     private var subscription: EventSubscription? = null
 
     /**
-     * Start the persistent subscription on `\$all`.
+     * Start the \$all catch-up subscription.
      * Called by [ReactorRunner] at coordinator startup.
      */
     fun start() {
-        subscription = eventStore.subscribePersistent(
-            streamId  = "\$all",
-            groupName = "effort-lifecycle-reactor",
-        ) { envelope ->
+        subscription = eventStore.subscribeToAll { envelope ->
             when (val event = envelope.data) {
-                is EffortPaused  -> signalAgents(event.effortId, Signal.PAUSE)
-                is EffortResumed -> signalAgents(event.effortId, Signal.RESUME)
-                is EffortClosed  -> signalAgents(event.effortId, Signal.STOP)
+                is EffortPaused  -> signalAgents(envelope.streamName.asEffortStream().id, Signal.PAUSE)
+                is EffortResumed -> signalAgents(envelope.streamName.asEffortStream().id, Signal.RESUME)
+                is EffortClosed  -> signalAgents(envelope.streamName.asEffortStream().id, Signal.STOP)
                 else             -> Unit  // EffortStarted and others are ignored
             }
         }
-        logger.info(
-            "EffortLifecycleReactor started (persistent subscription on \$all, group=effort-lifecycle-reactor)"
-        )
+        logger.info("EffortLifecycleReactor started (\$all catch-up subscription)")
     }
 
     /**
-     * Stop the persistent subscription.
+     * Stop the subscription.
      * Called by [ReactorRunner] on coordinator shutdown.
      */
     fun stop() {

@@ -6,7 +6,6 @@ import com.bigboote.domain.values.*
 import kotlinx.datetime.Instant
 
 data class EffortState(
-    val effortId: EffortId,
     val name: String,
     val goal: String,
     val status: EffortStatus,
@@ -16,7 +15,6 @@ data class EffortState(
 ) {
     fun apply(event: EffortEvent): EffortState = when (event) {
         is EffortCreated -> EffortState(
-            effortId = event.effortId,
             name = event.name,
             goal = event.goal,
             status = EffortStatus.CREATED,
@@ -33,7 +31,6 @@ data class EffortState(
 
     companion object {
         val EMPTY = EffortState(
-            effortId = EffortId("effort:__empty__"),
             name = "",
             goal = "",
             status = EffortStatus.CREATED,

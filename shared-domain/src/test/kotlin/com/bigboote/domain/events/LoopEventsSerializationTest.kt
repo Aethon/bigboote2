@@ -16,7 +16,7 @@ class LoopEventsSerializationTest : StringSpec({
     val agentId = AgentId("agent:test123")
 
     "StepStarted round-trip" {
-        val event: LoopEvent = StepStarted(agentId = agentId, startedAt = now)
+        val event: LoopEvent = StepStarted(startedAt = now)
         val encoded = json.encodeToString<LoopEvent>(event)
         val decoded = json.decodeFromString<LoopEvent>(encoded)
         decoded shouldBe event
@@ -24,7 +24,6 @@ class LoopEventsSerializationTest : StringSpec({
 
     "StepEnded round-trip" {
         val event: LoopEvent = StepEnded(
-            agentId = agentId,
             result = LoopStatus.PENDING,
             endedAt = now,
         )
@@ -35,7 +34,6 @@ class LoopEventsSerializationTest : StringSpec({
 
     "AssistantTurnSucceeded round-trip" {
         val event: LoopEvent = AssistantTurnSucceeded(
-            agentId = agentId,
             newMessage = buildJsonObject {
                 put("role", "user")
                 putJsonArray("content") { add(JsonPrimitive("Hello")) }
@@ -56,7 +54,6 @@ class LoopEventsSerializationTest : StringSpec({
 
     "AssistantTurnSucceeded with null newMessage" {
         val event: LoopEvent = AssistantTurnSucceeded(
-            agentId = agentId,
             newMessage = null,
             response = buildJsonObject { put("role", "assistant") },
             assistantStatus = AssistantStatus.PAUSED,
@@ -69,7 +66,6 @@ class LoopEventsSerializationTest : StringSpec({
 
     "AssistantTurnFailed round-trip" {
         val event: LoopEvent = AssistantTurnFailed(
-            agentId = agentId,
             newMessage = null,
             httpStatusCode = 500,
             httpStatus = "Internal Server Error",
@@ -86,7 +82,6 @@ class LoopEventsSerializationTest : StringSpec({
 
     "ToolUseRequested round-trip" {
         val event: LoopEvent = ToolUseRequested(
-            agentId = agentId,
             content = buildJsonArray {
                 addJsonObject {
                     put("id", "toolu_01ABC")
@@ -104,7 +99,6 @@ class LoopEventsSerializationTest : StringSpec({
 
     "ConversationMessageReceived round-trip" {
         val event: LoopEvent = ConversationMessageReceived(
-            agentId = agentId,
             messageId = MessageId("msg:test1"),
             convName = CollaboratorName.Channel("review"),
             from = CollaboratorName.Individual("alice"),

@@ -15,7 +15,6 @@ class DocumentEventsSerializationTest : StringSpec({
     "DocumentCreated round-trip" {
         val event: DocumentEvent = DocumentCreated(
             documentId = DocumentId("doc:test123"),
-            effortId = EffortId("effort:test123"),
             name = "oauth2-design.md",
             mimeType = "text/markdown",
             s3Key = "efforts/effort:test123/docs/doc:test123/oauth2-design.md",
@@ -30,7 +29,6 @@ class DocumentEventsSerializationTest : StringSpec({
     "DocumentUpdated round-trip" {
         val event: DocumentEvent = DocumentUpdated(
             documentId = DocumentId("doc:test123"),
-            effortId = EffortId("effort:test123"),
             s3Key = "efforts/effort:test123/docs/doc:test123/oauth2-design.md",
             updatedBy = CollaboratorName.Individual("lead-dev"),
             updatedAt = now,
@@ -43,7 +41,6 @@ class DocumentEventsSerializationTest : StringSpec({
     "DocumentDeleted round-trip" {
         val event: DocumentEvent = DocumentDeleted(
             documentId = DocumentId("doc:test123"),
-            effortId = EffortId("effort:test123"),
             deletedBy = CollaboratorName.Individual("lead-dev"),
             deletedAt = now,
         )

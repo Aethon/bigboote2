@@ -12,7 +12,6 @@ class AgentTypeStateTest : StringSpec({
     val agentTypeId = AgentTypeId.of("lead-eng")
 
     val createdEvent = AgentTypeCreated(
-        agentTypeId = agentTypeId,
         name = "Lead Engineer",
         model = "claude-sonnet-4-6",
         systemPrompt = "You are a senior engineer.",
@@ -26,7 +25,6 @@ class AgentTypeStateTest : StringSpec({
 
     "apply AgentTypeCreated initializes state" {
         val state = AgentTypeState.EMPTY.apply(createdEvent)
-        state.agentTypeId shouldBe agentTypeId
         state.name shouldBe "Lead Engineer"
         state.model shouldBe "claude-sonnet-4-6"
         state.maxTokens shouldBe 8192
@@ -45,7 +43,6 @@ class AgentTypeStateTest : StringSpec({
         val state = AgentTypeState.EMPTY
             .apply(createdEvent)
             .apply(AgentTypeUpdated(
-                agentTypeId = agentTypeId,
                 name = "Senior Engineer",
                 model = "claude-opus-4-6",
                 updatedAt = now,
@@ -61,7 +58,7 @@ class AgentTypeStateTest : StringSpec({
 
     "apply AgentTypeUpdated with all null fields preserves state" {
         val before = AgentTypeState.EMPTY.apply(createdEvent)
-        val after = before.apply(AgentTypeUpdated(agentTypeId = agentTypeId, updatedAt = now))
+        val after = before.apply(AgentTypeUpdated(updatedAt = now))
         after.name shouldBe before.name
         after.model shouldBe before.model
         after.systemPrompt shouldBe before.systemPrompt
@@ -76,7 +73,6 @@ class AgentTypeStateTest : StringSpec({
         val state = AgentTypeState.EMPTY
             .apply(createdEvent)
             .apply(AgentTypeUpdated(
-                agentTypeId = agentTypeId,
                 tools = listOf("deploy"),
                 updatedAt = now,
             ))

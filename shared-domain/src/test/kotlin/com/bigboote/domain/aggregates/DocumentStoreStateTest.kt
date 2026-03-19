@@ -14,7 +14,6 @@ class DocumentStoreStateTest : StringSpec({
 
     val createdEvent = DocumentCreated(
         documentId = docId,
-        effortId = effortId,
         name = "oauth2-design.md",
         mimeType = "text/markdown",
         s3Key = "efforts/effort:test123/docs/doc:test123/oauth2-design.md",
@@ -35,14 +34,14 @@ class DocumentStoreStateTest : StringSpec({
         val newS3Key = "efforts/effort:test123/docs/doc:test123/oauth2-design-v2.md"
         val state = DocumentStoreState.empty(effortId)
             .apply(createdEvent)
-            .apply(DocumentUpdated(docId, effortId, newS3Key, CollaboratorName.Individual("lead-dev"), now))
+            .apply(DocumentUpdated(docId, newS3Key, CollaboratorName.Individual("lead-dev"), now))
         state.documents[docId]!!.s3Key shouldBe newS3Key
     }
 
     "apply DocumentDeleted marks as deleted" {
         val state = DocumentStoreState.empty(effortId)
             .apply(createdEvent)
-            .apply(DocumentDeleted(docId, effortId, CollaboratorName.Individual("lead-dev"), now))
+            .apply(DocumentDeleted(docId, CollaboratorName.Individual("lead-dev"), now))
         state.documents[docId]!!.deleted shouldBe true
         // Document still in map (soft delete)
         state.documents.size shouldBe 1
@@ -50,13 +49,13 @@ class DocumentStoreStateTest : StringSpec({
 
     "apply DocumentUpdated for unknown doc is no-op" {
         val state = DocumentStoreState.empty(effortId)
-            .apply(DocumentUpdated(docId, effortId, "some-key", CollaboratorName.Individual("lead-dev"), now))
+            .apply(DocumentUpdated(docId, "some-key", CollaboratorName.Individual("lead-dev"), now))
         state.documents.size shouldBe 0
     }
 
     "apply DocumentDeleted for unknown doc is no-op" {
         val state = DocumentStoreState.empty(effortId)
-            .apply(DocumentDeleted(docId, effortId, CollaboratorName.Individual("lead-dev"), now))
+            .apply(DocumentDeleted(docId, CollaboratorName.Individual("lead-dev"), now))
         state.documents.size shouldBe 0
     }
 
@@ -64,8 +63,8 @@ class DocumentStoreStateTest : StringSpec({
         val docId2 = DocumentId("doc:test456")
         val state = DocumentStoreState.empty(effortId)
             .apply(createdEvent)
-            .apply(DocumentCreated(docId2, effortId, "readme.md", "text/markdown", "key2", CollaboratorName.Individual("alice"), now))
-            .apply(DocumentDeleted(docId, effortId, CollaboratorName.Individual("lead-dev"), now))
+            .apply(DocumentCreated(docId2, "readme.md", "text/markdown", "key2", CollaboratorName.Individual("alice"), now))
+            .apply(DocumentDeleted(docId, CollaboratorName.Individual("lead-dev"), now))
         state.documents.size shouldBe 2
         state.documents[docId]!!.deleted shouldBe true
         state.documents[docId2]!!.deleted shouldBe false

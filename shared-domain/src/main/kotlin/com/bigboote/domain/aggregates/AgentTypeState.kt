@@ -6,7 +6,6 @@ import com.bigboote.domain.values.AgentTypeId
 import kotlinx.datetime.Instant
 
 data class AgentTypeState(
-    val agentTypeId: AgentTypeId,
     val name: String,
     val model: String,
     val systemPrompt: String,
@@ -19,7 +18,6 @@ data class AgentTypeState(
 ) {
     fun apply(event: AgentTypeEvent): AgentTypeState = when (event) {
         is AgentTypeCreated -> AgentTypeState(
-            agentTypeId = event.agentTypeId,
             name = event.name,
             model = event.model,
             systemPrompt = event.systemPrompt,
@@ -44,7 +42,6 @@ data class AgentTypeState(
 
     companion object {
         val EMPTY = AgentTypeState(
-            agentTypeId = AgentTypeId.of("empty"),
             name = "",
             model = "",
             systemPrompt = "",

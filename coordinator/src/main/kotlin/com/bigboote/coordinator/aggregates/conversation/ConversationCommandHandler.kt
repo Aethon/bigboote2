@@ -9,8 +9,8 @@ import com.bigboote.domain.errors.DomainError
 import com.bigboote.domain.events.ConversationEvent.*
 import com.bigboote.domain.values.ConvId
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.ExpectedVersion
-import com.bigboote.events.streams.StreamNames
 import kotlinx.datetime.Clock
 import org.slf4j.LoggerFactory
 
@@ -61,15 +61,13 @@ class ConversationCommandHandlerImpl(
         }
 
         val event = ConversationCreated(
-            convId   = convId.value,
-            effortId = cmd.effortId,
-            convName = cmd.convName,
-            members  = cmd.members,
+            convName  = cmd.convName,
+            members   = cmd.members,
             createdAt = clock.now(),
         )
 
         repo.append(
-            StreamNames.conversation(cmd.effortId, convId),
+            StreamName.Conversation(cmd.effortId, convId),
             listOf(event),
             ExpectedVersion.NoStream,
         )
@@ -116,22 +114,18 @@ class ConversationCommandHandlerImpl(
                         com.bigboote.domain.values.CollaboratorName.from("@${convId.party2}"),
                     )
                     val created = ConversationCreated(
-                        convId    = convId.value,
-                        effortId  = cmd.effortId,
                         convName  = dmName,
                         members   = members,
                         createdAt = clock.now(),
                     )
                     val posted = MessagePosted(
                         messageId = cmd.messageId,
-                        convId    = convId.value,
-                        effortId  = cmd.effortId,
                         from      = cmd.from,
                         body      = cmd.body,
                         postedAt  = clock.now(),
                     )
                     repo.append(
-                        StreamNames.conversation(cmd.effortId, convId),
+                        StreamName.Conversation(cmd.effortId, convId),
                         listOf(created, posted),
                         ExpectedVersion.NoStream,
                     )
@@ -148,14 +142,12 @@ class ConversationCommandHandlerImpl(
             // Conversation exists — just append the message.
             val event = MessagePosted(
                 messageId = cmd.messageId,
-                convId    = convId.value,
-                effortId  = cmd.effortId,
                 from      = cmd.from,
                 body      = cmd.body,
                 postedAt  = clock.now(),
             )
             repo.append(
-                StreamNames.conversation(cmd.effortId, convId),
+                StreamName.Conversation(cmd.effortId, convId),
                 listOf(event),
                 ExpectedVersion.Exact(version),
             )
@@ -193,14 +185,12 @@ class ConversationCommandHandlerImpl(
         }
 
         val event = MemberAdded(
-            convId   = cmd.convId,
-            effortId = cmd.effortId,
-            member   = cmd.member,
-            addedAt  = clock.now(),
+            member  = cmd.member,
+            addedAt = clock.now(),
         )
 
         repo.append(
-            StreamNames.conversation(cmd.effortId, convId),
+            StreamName.Conversation(cmd.effortId, convId),
             listOf(event),
             ExpectedVersion.Exact(version),
         )
@@ -217,7 +207,7 @@ class ConversationCommandHandlerImpl(
         convId: ConvId,
     ): Pair<ConversationState, Long> =
         repo.load(
-            StreamNames.conversation(effortId, convId),
+            StreamName.Conversation(effortId, convId),
             ConversationState.EMPTY,
         ) { state, event ->
             if (event is com.bigboote.domain.events.ConversationEvent) state.apply(event) else state

@@ -14,6 +14,7 @@ import com.bigboote.domain.errors.DomainError
 import com.bigboote.domain.values.CollaboratorName
 import com.bigboote.domain.values.DocumentId
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -83,19 +84,20 @@ fun Route.documentRoutes() {
 
             commandHandler.handle(cmd, req.content)
 
+            val docsStream = StreamName.Docs(effortId)
             // Begin tracking the docs stream for this effort (idempotent)
             projection.trackEffort(effortId)
             // Project event directly for read-your-writes consistency
             projection.project(
                 com.bigboote.domain.events.DocumentEvent.DocumentCreated(
                     documentId = documentId,
-                    effortId   = effortId,
                     name       = req.name.trim(),
                     mimeType   = req.mimeType.trim(),
                     s3Key      = s3Key,
                     createdBy  = createdBy,
                     createdAt  = kotlinx.datetime.Clock.System.now(),
-                )
+                ),
+                docsStream,
             )
 
             logger.info("Document created via API: {} in effort {}", documentId, effortId)
@@ -185,11 +187,11 @@ fun Route.documentRoutes() {
             projection.project(
                 com.bigboote.domain.events.DocumentEvent.DocumentUpdated(
                     documentId = documentId,
-                    effortId   = effortId,
                     s3Key      = s3Key,
                     updatedBy  = updatedBy,
                     updatedAt  = kotlinx.datetime.Clock.System.now(),
-                )
+                ),
+                StreamName.Docs(effortId),
             )
 
             logger.info("Document updated via API: {} in effort {}", documentId, effortId)
@@ -235,10 +237,10 @@ fun Route.documentRoutes() {
             projection.project(
                 com.bigboote.domain.events.DocumentEvent.DocumentDeleted(
                     documentId = documentId,
-                    effortId   = effortId,
                     deletedBy  = deletedBy,
                     deletedAt  = kotlinx.datetime.Clock.System.now(),
-                )
+                ),
+                StreamName.Docs(effortId),
             )
 
             logger.info("Document deleted via API: {} in effort {}", documentId, effortId)

@@ -7,8 +7,9 @@ import com.bigboote.domain.aggregates.DocumentStoreState
 import com.bigboote.domain.commands.DocumentCommand.*
 import com.bigboote.domain.errors.DomainError
 import com.bigboote.domain.events.DocumentEvent.*
+import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.ExpectedVersion
-import com.bigboote.events.streams.StreamNames
 import kotlinx.datetime.Clock
 import org.slf4j.LoggerFactory
 
@@ -19,7 +20,7 @@ private val logger = LoggerFactory.getLogger(DocumentCommandHandler::class.java)
  * KurrentDB, performing domain validation, uploading content to S3, and appending
  * the corresponding domain event to the docs stream.
  *
- * All three commands share the same stream: [StreamNames.docs].
+ * All three commands share the same stream: [StreamName.Docs].
  *
  * S3 upload happens **before** appending the event to ensure content is durable
  * before any projection or reactor observes the event. The s3Key is derived via
@@ -54,7 +55,6 @@ class DocumentCommandHandler(
 
         val event = DocumentCreated(
             documentId = cmd.documentId,
-            effortId   = cmd.effortId,
             name       = cmd.name,
             mimeType   = cmd.mimeType,
             s3Key      = s3Key,
@@ -63,7 +63,7 @@ class DocumentCommandHandler(
         )
 
         repo.append(
-            StreamNames.docs(cmd.effortId),
+            StreamName.Docs(cmd.effortId),
             listOf(event),
             if (version < 0) ExpectedVersion.NoStream else ExpectedVersion.Exact(version),
         )
@@ -93,14 +93,13 @@ class DocumentCommandHandler(
 
         val event = DocumentUpdated(
             documentId = cmd.documentId,
-            effortId   = cmd.effortId,
             s3Key      = s3Key,
             updatedBy  = cmd.updatedBy,
             updatedAt  = clock.now(),
         )
 
         repo.append(
-            StreamNames.docs(cmd.effortId),
+            StreamName.Docs(cmd.effortId),
             listOf(event),
             ExpectedVersion.Exact(version),
         )
@@ -126,13 +125,12 @@ class DocumentCommandHandler(
 
         val event = DocumentDeleted(
             documentId = cmd.documentId,
-            effortId   = cmd.effortId,
             deletedBy  = cmd.deletedBy,
             deletedAt  = clock.now(),
         )
 
         repo.append(
-            StreamNames.docs(cmd.effortId),
+            StreamName.Docs(cmd.effortId),
             listOf(event),
             ExpectedVersion.Exact(version),
         )
@@ -143,10 +141,10 @@ class DocumentCommandHandler(
     // ---- private helpers ----
 
     private suspend fun loadDocumentStore(
-        effortId: com.bigboote.domain.values.EffortId,
+        effortId: EffortId,
     ): Pair<DocumentStoreState, Long> =
         repo.load(
-            StreamNames.docs(effortId),
+            StreamName.Docs(effortId),
             DocumentStoreState.empty(effortId),
         ) { s, event ->
             if (event is com.bigboote.domain.events.DocumentEvent) s.apply(event) else s

@@ -29,7 +29,7 @@ interface Projection {
      * Must be idempotent — it may be called more than once for the same event
      * if the subscription replays it after a direct call.
      */
-    suspend fun handle(envelope: EventEnvelope)
+    suspend fun handle(envelope: EventEnvelope<Any>)
 
     /**
      * Returns the count of events processed since the last restart.

@@ -14,7 +14,6 @@ class AgentTypeEventsSerializationTest : StringSpec({
 
     "AgentTypeCreated round-trip with all fields" {
         val event: AgentTypeEvent = AgentTypeCreated(
-            agentTypeId = AgentTypeId.of("lead-eng"),
             name = "Lead Engineer",
             model = "claude-sonnet-4-6",
             systemPrompt = "You are a senior engineer.",
@@ -32,7 +31,6 @@ class AgentTypeEventsSerializationTest : StringSpec({
 
     "AgentTypeCreated round-trip with null optionals" {
         val event: AgentTypeEvent = AgentTypeCreated(
-            agentTypeId = AgentTypeId.of("reviewer"),
             name = "Reviewer",
             model = "claude-sonnet-4-6",
             systemPrompt = "You are a code reviewer.",
@@ -50,7 +48,6 @@ class AgentTypeEventsSerializationTest : StringSpec({
 
     "AgentTypeUpdated round-trip with partial fields" {
         val event: AgentTypeEvent = AgentTypeUpdated(
-            agentTypeId = AgentTypeId.of("lead-eng"),
             name = "Senior Engineer",
             model = "claude-opus-4-6",
             updatedAt = now,
@@ -62,7 +59,6 @@ class AgentTypeEventsSerializationTest : StringSpec({
 
     "AgentTypeUpdated round-trip with all fields" {
         val event: AgentTypeEvent = AgentTypeUpdated(
-            agentTypeId = AgentTypeId.of("lead-eng"),
             name = "Senior Engineer",
             model = "claude-opus-4-6",
             systemPrompt = "Updated prompt.",
