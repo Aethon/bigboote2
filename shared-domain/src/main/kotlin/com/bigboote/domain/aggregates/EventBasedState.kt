@@ -71,7 +71,8 @@ abstract class StreamState<E : Any, S : StreamState<E, S>> {
     protected abstract fun apply(event: E, context: EventContext): S
 }
 
-abstract class NoContextStreamState<E : Any, S : NoContextStreamState<E, S>>: StreamState<E, S>() {
+abstract class NoContextStreamState<E : Any, S : NoContextStreamState<E, S>> :
+    StreamState<E, S>() {
 
     final override fun apply(event: E, context: EventContext): S = apply(event)
 
@@ -89,6 +90,11 @@ data class StreamPositionState<E : Any, S : StreamState<E, S>>
         copy(state = state.apply(entry), streamPosition = entry.context.streamPosition)
 }
 
-interface StreamStateStarter<E: Any, S: StreamState<E, S>> {
+/**
+ * Interface for starting a stream state from an event log entry.
+ *
+ * This interface is typically implemented by the companion object to the stream state class.
+ */
+interface StreamStateStarter<E : Any, S : StreamState<E, S>> {
     fun start(entry: EventLogEntry<E>): S
 }
