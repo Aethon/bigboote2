@@ -55,7 +55,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "EffortCreated round-trip through EventRegistry" {
         roundTrip(
             EffortCreated(
-                effortId = EffortId("effort:test123roundtrip"),
                 name = "Add OAuth2 support",
                 goal = "Implement OAuth2 authorization code flow.",
                 collaborators = listOf(
@@ -79,7 +78,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "EffortStarted round-trip through EventRegistry" {
         roundTrip(
             EffortStarted(
-                effortId = EffortId("effort:test123roundtrip"),
                 occurredAt = now,
             )
         )
@@ -88,7 +86,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "EffortPaused round-trip through EventRegistry" {
         roundTrip(
             EffortPaused(
-                effortId = EffortId("effort:test123roundtrip"),
                 occurredAt = now,
             )
         )
@@ -97,7 +94,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "EffortResumed round-trip through EventRegistry" {
         roundTrip(
             EffortResumed(
-                effortId = EffortId("effort:test123roundtrip"),
                 occurredAt = now,
             )
         )
@@ -106,7 +102,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "EffortClosed round-trip through EventRegistry" {
         roundTrip(
             EffortClosed(
-                effortId = EffortId("effort:test123roundtrip"),
                 occurredAt = now,
             )
         )
@@ -116,7 +111,6 @@ class EventSerializationRoundTripTest : StringSpec({
         roundTrip(
             AgentSpawnRequested(
                 agentId = AgentId("agent:spawn123test"),
-                effortId = EffortId("effort:test123roundtrip"),
                 agentTypeId = AgentTypeId.of("lead-eng"),
                 collaboratorName = CollaboratorName.Individual("lead-dev"),
                 gatewayToken = "550e8400-e29b-41d4-a716-446655440000",
@@ -131,8 +125,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "AgentStarted round-trip through EventRegistry" {
         roundTrip(
             AgentStarted(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
-                effortId = EffortId("effort:test123roundtrip"),
                 agentTypeId = AgentTypeId.of("lead-eng"),
                 collaboratorName = CollaboratorName.Individual("lead-dev"),
                 supportedGatewayApiVersions = listOf("v1"),
@@ -145,7 +137,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "AgentStopped round-trip through EventRegistry" {
         roundTrip(
             AgentStopped(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 occurredAt = now,
             )
         )
@@ -154,7 +145,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "AgentFailed round-trip through EventRegistry" {
         roundTrip(
             AgentFailed(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 reason = "Unhandled exception in tool executor: connection refused",
                 failedAt = now,
             )
@@ -164,7 +154,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "AgentPaused round-trip through EventRegistry" {
         roundTrip(
             AgentPaused(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 occurredAt = now,
             )
         )
@@ -173,7 +162,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "AgentResumed round-trip through EventRegistry" {
         roundTrip(
             AgentResumed(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 occurredAt = now,
             )
         )
@@ -182,7 +170,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "LLMRequestSent round-trip through EventRegistry" {
         roundTrip(
             LLMRequestSent(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 model = "claude-sonnet-4-6",
                 inputTokens = 1540,
                 occurredAt = now,
@@ -193,7 +180,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "LLMResponseReceived round-trip through EventRegistry" {
         roundTrip(
             LLMResponseReceived(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 outputTokens = 312,
                 occurredAt = now,
             )
@@ -203,7 +189,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "ToolInvoked round-trip through EventRegistry" {
         roundTrip(
             ToolInvoked(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 toolName = "run_command",
                 toolCallId = "toolu_01ABC",
                 parameters = JsonObject(mapOf("command" to JsonPrimitive("cat src/auth/oauth.kt"))),
@@ -215,7 +200,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "ToolResultReceived round-trip through EventRegistry" {
         roundTrip(
             ToolResultReceived(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 toolCallId = "toolu_01ABC",
                 result = "package com.bigboote.auth ...",
                 isError = false,
@@ -229,7 +213,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "StepStarted round-trip through EventRegistry" {
         roundTrip(
             StepStarted(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 startedAt = now,
             )
         )
@@ -238,7 +221,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "StepEnded round-trip through EventRegistry" {
         roundTrip(
             StepEnded(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 result = LoopStatus.PENDING,
                 endedAt = now,
             )
@@ -248,7 +230,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "AssistantTurnSucceeded round-trip through EventRegistry" {
         roundTrip(
             AssistantTurnSucceeded(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 newMessage = JsonObject(mapOf("role" to JsonPrimitive("user"))),
                 response = JsonObject(mapOf("role" to JsonPrimitive("assistant"))),
                 assistantStatus = AssistantStatus.TOOL_USE,
@@ -261,7 +242,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "AssistantTurnSucceeded with null newMessage round-trip" {
         roundTrip(
             AssistantTurnSucceeded(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 newMessage = null,
                 response = JsonObject(mapOf("role" to JsonPrimitive("assistant"))),
                 assistantStatus = AssistantStatus.IDLE,
@@ -274,7 +254,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "AssistantTurnFailed round-trip through EventRegistry" {
         roundTrip(
             AssistantTurnFailed(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 newMessage = JsonObject(mapOf("role" to JsonPrimitive("user"))),
                 httpStatusCode = 529,
                 httpStatus = "Overloaded",
@@ -287,7 +266,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "ToolUseRequested round-trip through EventRegistry" {
         roundTrip(
             ToolUseRequested(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 content = JsonObject(
                     mapOf(
                         "id" to JsonPrimitive("toolu_01ABC"),
@@ -303,7 +281,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "ConversationMessageReceived round-trip through EventRegistry" {
         roundTrip(
             ConversationMessageReceived(
-                agentId = AgentId("agent:K9mPqR2xYwtest"),
                 messageId = MessageId("msg:Xn4wQpL7jTtest"),
                 convName = CollaboratorName.Channel("review"),
                 from = CollaboratorName.Individual("alice"),
@@ -318,8 +295,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "ConversationCreated round-trip through EventRegistry" {
         roundTrip(
             ConversationCreated(
-                convId = "conv:#review",
-                effortId = EffortId("effort:test123roundtrip"),
                 convName = CollaboratorName.Channel("review"),
                 members = listOf(
                     CollaboratorName.Individual("lead-dev"),
@@ -334,8 +309,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "MemberAdded round-trip through EventRegistry" {
         roundTrip(
             MemberAdded(
-                convId = "conv:#review",
-                effortId = EffortId("effort:test123roundtrip"),
                 member = CollaboratorName.Individual("bob"),
                 addedAt = now,
             )
@@ -346,8 +319,6 @@ class EventSerializationRoundTripTest : StringSpec({
         roundTrip(
             MessagePosted(
                 messageId = MessageId("msg:Xn4wQpL7jTtest"),
-                convId = "conv:#review",
-                effortId = EffortId("effort:test123roundtrip"),
                 from = CollaboratorName.Individual("alice"),
                 body = "One comment on the token expiry logic.",
                 postedAt = now,
@@ -361,7 +332,6 @@ class EventSerializationRoundTripTest : StringSpec({
         roundTrip(
             DocumentCreated(
                 documentId = DocumentId("doc:Bn8rYpM3kQtest"),
-                effortId = EffortId("effort:test123roundtrip"),
                 name = "oauth2-design.md",
                 mimeType = "text/markdown",
                 s3Key = "efforts/effort:test123roundtrip/docs/doc:Bn8rYpM3kQtest/oauth2-design.md",
@@ -375,7 +345,6 @@ class EventSerializationRoundTripTest : StringSpec({
         roundTrip(
             DocumentUpdated(
                 documentId = DocumentId("doc:Bn8rYpM3kQtest"),
-                effortId = EffortId("effort:test123roundtrip"),
                 s3Key = "efforts/effort:test123roundtrip/docs/doc:Bn8rYpM3kQtest/oauth2-design.md",
                 updatedBy = CollaboratorName.Individual("reviewer"),
                 updatedAt = now,
@@ -387,7 +356,6 @@ class EventSerializationRoundTripTest : StringSpec({
         roundTrip(
             DocumentDeleted(
                 documentId = DocumentId("doc:Bn8rYpM3kQtest"),
-                effortId = EffortId("effort:test123roundtrip"),
                 deletedBy = CollaboratorName.Individual("lead-dev"),
                 deletedAt = now,
             )
@@ -399,7 +367,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "AgentTypeCreated round-trip through EventRegistry" {
         roundTrip(
             AgentTypeCreated(
-                agentTypeId = AgentTypeId.of("lead-eng"),
                 name = "Lead Engineer",
                 model = "claude-sonnet-4-6",
                 systemPrompt = "You are a senior engineer leading a focused development effort.",
@@ -416,7 +383,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "AgentTypeUpdated round-trip through EventRegistry" {
         roundTrip(
             AgentTypeUpdated(
-                agentTypeId = AgentTypeId.of("lead-eng"),
                 name = "Lead Engineer v2",
                 model = null,
                 systemPrompt = null,
@@ -433,7 +399,6 @@ class EventSerializationRoundTripTest : StringSpec({
     "AgentTypeUpdated with all fields null except required round-trip" {
         roundTrip(
             AgentTypeUpdated(
-                agentTypeId = AgentTypeId.of("reviewer"),
                 updatedAt = now,
             )
         )

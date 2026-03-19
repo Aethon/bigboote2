@@ -46,7 +46,11 @@ dependencies {
     // KurrentDB (needed for EventStore subscriptions used by Reactors/Projections)
     implementation(libs.kurrentdb.client)
 
+    // AWS SDK v2 — Phase 14: Document S3 storage
+    implementation(libs.aws.sdk.java.s3)
+
     testImplementation(libs.ktor.server.test.host)
+    testImplementation(libs.ktor.client.mock)
     testImplementation(libs.kotest.runner)
     testImplementation(libs.kotest.assertions)
     testImplementation(libs.koin.test)

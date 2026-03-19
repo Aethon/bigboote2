@@ -1,5 +1,54 @@
 package com.bigboote.coordinator.koin
 
+import com.bigboote.coordinator.aggregates.AggregateRepository
+import com.bigboote.coordinator.aggregates.agenttype.AgentTypeCommandHandler
+import com.bigboote.coordinator.aggregates.agenttype.AgentTypeCommandHandlerImpl
+import com.bigboote.coordinator.aggregates.conversation.ConversationCommandHandler
+import com.bigboote.coordinator.aggregates.conversation.ConversationCommandHandlerImpl
+import com.bigboote.coordinator.aggregates.document.DocumentCommandHandler
+import com.bigboote.coordinator.aggregates.effort.EffortCommandHandler
+import com.bigboote.coordinator.aggregates.effort.EffortCommandHandlerImpl
+import com.bigboote.coordinator.auth.BearerTokenValidator
+import com.bigboote.coordinator.auth.GatewayTokenValidator
+import com.bigboote.coordinator.auth.StubBearerTokenValidator
+import com.bigboote.coordinator.auth.TokenGenerator
+import com.bigboote.coordinator.auth.TokenStore
+import com.bigboote.coordinator.projections.AgentTypeSummaryProjection
+import com.bigboote.coordinator.projections.AgentTypeSummaryProjectionImpl
+import com.bigboote.coordinator.projections.ConversationProjection
+import com.bigboote.coordinator.projections.ConversationProjectionImpl
+import com.bigboote.coordinator.projections.DocumentListProjection
+import com.bigboote.coordinator.projections.EffortSummaryProjection
+import com.bigboote.coordinator.projections.EffortSummaryProjectionImpl
+import com.bigboote.coordinator.projections.ProjectionRunner
+import com.bigboote.coordinator.projections.repositories.AgentTypeReadRepository
+import com.bigboote.coordinator.projections.repositories.AgentTypeReadRepositoryImpl
+import com.bigboote.coordinator.projections.repositories.ConversationReadRepository
+import com.bigboote.coordinator.projections.repositories.ConversationReadRepositoryImpl
+import com.bigboote.coordinator.projections.repositories.DocumentReadRepository
+import com.bigboote.coordinator.projections.repositories.EffortReadRepository
+import com.bigboote.coordinator.projections.repositories.EffortReadRepositoryImpl
+import com.bigboote.coordinator.messaging.NativeMessagingAdapter
+import com.bigboote.coordinator.messaging.SseEventBroadcaster
+import com.bigboote.coordinator.storage.AwsS3DocumentStorage
+import com.bigboote.coordinator.storage.S3DocumentStorage
+import com.bigboote.infra.config.BigbooteConfig
+import com.bigboote.coordinator.proxy.ProxyRegistry
+import com.bigboote.coordinator.proxy.spawn.DockerSpawnStrategy
+import com.bigboote.coordinator.proxy.spawn.FlyMachineSpawnStrategy
+import com.bigboote.coordinator.proxy.spawn.SpawnStrategy
+import com.bigboote.coordinator.reactors.EffortLifecycleReactor
+import com.bigboote.coordinator.reactors.MessageDeliveryReactor
+import com.bigboote.coordinator.reactors.ReactorRunner
+import com.bigboote.coordinator.reactors.SpawnReactor
+import com.bigboote.coordinator.reactors.SystemMessageReactor
+import com.bigboote.coordinator.system.SystemCollaborator
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
+import kotlinx.datetime.Clock
+import kotlinx.serialization.json.Json
 import org.koin.dsl.module
 
 /**
@@ -11,7 +60,7 @@ import org.koin.dsl.module
  * Infrastructure beans (BigbooteConfig, EventStore, DatabaseFactory, KurrentDB
  * clients) are provided by sharedInfraModule from shared-infra — NOT duplicated
  * here. The coordinator's InfrastructureModule is reserved for coordinator-only
- * infra beans (e.g. AggregateRepository in Phase 5).
+ * infra beans.
  *
  * See Architecture doc Section 13.1 for the full target wiring.
  */
@@ -20,34 +69,100 @@ val InfrastructureModule = module {
     // DECISION: Shared infra beans (EventStore, DatabaseFactory, BigbooteConfig,
     // KurrentDB clients) are wired in sharedInfraModule and loaded separately in
     // Application.kt. This module holds coordinator-only infra beans.
-    // Phase 5: AggregateRepository
+    single { AggregateRepository(get()) }
+    // Phase 14: S3 document storage — backed by AWS SDK v2 / LocalStack / MinIO
+    single<S3DocumentStorage> { AwsS3DocumentStorage(get<BigbooteConfig>().s3) }
 }
 
 val AuthModule = module {
-    // Phase 7: TokenStore, TokenGenerator, BearerTokenValidator, GatewayTokenValidator, AuthPlugin
+    single { TokenStore() }
+    single { TokenGenerator() }
+    single<BearerTokenValidator> { StubBearerTokenValidator() }
+    single { GatewayTokenValidator(get()) }   // delegates to TokenStore
 }
 
 val DomainModule = module {
-    // Phase 5+: EffortCommandHandler, AgentTypeCommandHandler, ConversationCommandHandler,
-    //           DocumentCommandHandler, SystemCollaborator
+    // Clock.System passed per Architecture doc Section 13.1 for testability.
+    single<EffortCommandHandler> { EffortCommandHandlerImpl(get(), Clock.System) }
+    single<AgentTypeCommandHandler> { AgentTypeCommandHandlerImpl(get(), Clock.System) }
+    single<ConversationCommandHandler> { ConversationCommandHandlerImpl(get(), Clock.System) }  // Phase 11
+    single { DocumentCommandHandler(get(), Clock.System, get()) }  // Phase 14
+    single { SystemCollaborator(get()) }                           // Phase 15
 }
 
 val ProjectionModule = module {
-    // Phase 5+: EffortSummaryProjection, AgentInstanceStatusProjection, ConversationProjection,
-    //           DocumentListProjection, read repositories, ProjectionRunner
+    single<EffortSummaryProjection> { EffortSummaryProjectionImpl(get()) }
+    single<EffortReadRepository> { EffortReadRepositoryImpl() }
+    single<AgentTypeSummaryProjection> { AgentTypeSummaryProjectionImpl(get()) }
+    single<AgentTypeReadRepository> { AgentTypeReadRepositoryImpl() }
+    single<ConversationProjection> { ConversationProjectionImpl(get()) }       // Phase 11
+    single<ConversationReadRepository> { ConversationReadRepositoryImpl() }    // Phase 11
+    single { DocumentListProjection(get()) }       // Phase 14
+    single { DocumentReadRepository() }            // Phase 14
+    single { ProjectionRunner(get(), get(), get(), get()) }
 }
 
 val ReactorModule = module {
-    // Phase 10+: SpawnReactor, EffortLifecycleReactor, MessageDeliveryReactor,
-    //            SystemMessageReactor, ReactorRunner
+    // Phase 10: SpawnReactor
+    single {
+        SpawnReactor(
+            eventStore               = get(),
+            agentTypeReadRepository  = get(),
+            spawnStrategy            = get(),
+            proxyRegistry            = get(),
+            coordinatorGatewayUrl    = System.getenv("BIGBOOTE_COORDINATOR_GATEWAY_URL")
+                ?: "http://host.docker.internal:8080/internal/v1",
+        )
+    }
+    // Phase 13: MessageDeliveryReactor
+    single {
+        MessageDeliveryReactor(
+            eventStore                  = get(),
+            proxyRegistry               = get(),
+            conversationReadRepository  = get(),
+        )
+    }
+    // Phase 15: SystemMessageReactor, EffortLifecycleReactor
+    single { SystemMessageReactor(get(), get(), get()) }
+    single { EffortLifecycleReactor(get(), get()) }
+    single { ReactorRunner(get(), get(), get(), get()) }
 }
 
 val ProxyModule = module {
-    // Phase 10+: ProxyRegistry, DockerSpawnStrategy, SpawnStrategyFactory
+    // Phase 10: ProxyRegistry, shared HttpClient, DockerSpawnStrategy
+    // Phase 20: FlyMachineSpawnStrategy; active strategy selected via BIGBOOTE_SPAWN_STRATEGY env var.
+    single { ProxyRegistry() }
+    single {
+        // Shared Ktor HTTP client for all proxy instances (Docker and Fly).
+        // Configured with JSON content negotiation to match both the agent Control API
+        // and the Fly Machines REST API.
+        HttpClient(CIO) {
+            install(ContentNegotiation) {
+                json(Json {
+                    ignoreUnknownKeys = true
+                    encodeDefaults = true
+                })
+            }
+        }
+    }
+    // Both concrete strategies are registered so they can be resolved by type.
+    single { DockerSpawnStrategy(get()) }
+    single { FlyMachineSpawnStrategy(get<BigbooteConfig>().fly, get()) }
+    // The SpawnStrategy interface binding is determined at startup by BIGBOOTE_SPAWN_STRATEGY.
+    // Supported values: "docker" (default), "fly".
+    single<SpawnStrategy> {
+        when (System.getenv("BIGBOOTE_SPAWN_STRATEGY")?.lowercase() ?: "docker") {
+            "fly"  -> get<FlyMachineSpawnStrategy>()
+            else   -> get<DockerSpawnStrategy>()
+        }
+    }
 }
 
 val MessagingModule = module {
-    // Phase 13+: SseEventBroadcaster, NativeMessagingAdapter
+    // Phase 13: SseEventBroadcaster fans KurrentDB events to SSE connections.
+    // NativeMessagingAdapter creates ExternalProxy instances for WebSocket users.
+    single { SseEventBroadcaster(get()) }
+    single { NativeMessagingAdapter() }
 }
 
 val ApiModule = module {

@@ -14,8 +14,6 @@ class ConversationEventsSerializationTest : StringSpec({
 
     "ConversationCreated channel round-trip" {
         val event: ConversationEvent = ConversationCreated(
-            convId = "conv:#review",
-            effortId = EffortId("effort:test123"),
             convName = CollaboratorName.Channel("review"),
             members = listOf(
                 CollaboratorName.Individual("lead-dev"),
@@ -31,8 +29,6 @@ class ConversationEventsSerializationTest : StringSpec({
 
     "ConversationCreated dm round-trip" {
         val event: ConversationEvent = ConversationCreated(
-            convId = "conv:@alice+@lead-dev",
-            effortId = EffortId("effort:test123"),
             convName = CollaboratorName.Individual("alice"),
             members = listOf(
                 CollaboratorName.Individual("alice"),
@@ -47,8 +43,6 @@ class ConversationEventsSerializationTest : StringSpec({
 
     "MemberAdded round-trip" {
         val event: ConversationEvent = MemberAdded(
-            convId = "conv:#review",
-            effortId = EffortId("effort:test123"),
             member = CollaboratorName.Individual("new-reviewer"),
             addedAt = now,
         )
@@ -60,8 +54,6 @@ class ConversationEventsSerializationTest : StringSpec({
     "MessagePosted round-trip" {
         val event: ConversationEvent = MessagePosted(
             messageId = MessageId("msg:test1"),
-            convId = "conv:#review",
-            effortId = EffortId("effort:test123"),
             from = CollaboratorName.Individual("alice"),
             body = "One comment on the token expiry logic.",
             postedAt = now,
@@ -74,8 +66,6 @@ class ConversationEventsSerializationTest : StringSpec({
     "MessagePosted from system round-trip" {
         val event: ConversationEvent = MessagePosted(
             messageId = MessageId("msg:sys1"),
-            convId = "conv:@alice+@lead-dev",
-            effortId = EffortId("effort:test123"),
             from = CollaboratorName.Individual("system"),
             body = "Effort has been paused by the Coordinator.",
             postedAt = now,

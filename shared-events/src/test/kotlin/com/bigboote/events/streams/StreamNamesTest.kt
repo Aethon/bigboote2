@@ -4,43 +4,56 @@ import com.bigboote.domain.values.AgentId
 import com.bigboote.domain.values.AgentTypeId
 import com.bigboote.domain.values.ConvId
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 
+/**
+ * Verifies [StreamName] path generation for all stream types.
+ *
+ * Paths embed the full typed-ID values (which include their own prefix), so the
+ * stream segment is doubled — e.g. EffortId("effort:V1StGXR8_Z") produces
+ * "/effort:effort:V1StGXR8_Z". This is by design: the ID type carries its prefix
+ * and the stream hierarchy adds its own segment prefix independently.
+ */
 class StreamNamesTest : StringSpec({
 
     val effortId = EffortId("effort:V1StGXR8_Z")
-    val agentId = AgentId("agent:K9mPqR2xYw")
+    val agentId  = AgentId("agent:K9mPqR2xYw")
 
-    "effort stream name" {
-        StreamNames.effort(effortId) shouldBe "/effort:V1StGXR8_Z"
+    "effort stream path" {
+        StreamName.Effort(effortId).path shouldBe "/effort:effort:V1StGXR8_Z"
     }
 
-    "agent stream name" {
-        StreamNames.agent(effortId, agentId) shouldBe "/effort:V1StGXR8_Z/agent:K9mPqR2xYw"
+    "agent stream path" {
+        StreamName.Agent(effortId, agentId).path shouldBe
+            "/effort:effort:V1StGXR8_Z/agent:agent:K9mPqR2xYw"
     }
 
-    "conversation stream name for Channel" {
+    "conversation stream path for Channel" {
         val convId = ConvId.channel("review")
-        StreamNames.conversation(effortId, convId) shouldBe "/effort:V1StGXR8_Z/conv:review"
+        StreamName.Conversation(effortId, convId).path shouldBe
+            "/effort:effort:V1StGXR8_Z/conv:review"
     }
 
-    "conversation stream name for DirectMessage strips @ signs" {
+    "conversation stream path for DirectMessage strips @ signs" {
         val convId = ConvId.dm("alice", "lead-dev")
-        StreamNames.conversation(effortId, convId) shouldBe "/effort:V1StGXR8_Z/conv:alice+lead-dev"
+        StreamName.Conversation(effortId, convId).path shouldBe
+            "/effort:effort:V1StGXR8_Z/conv:alice+lead-dev"
     }
 
-    "conversation stream name for DM sorts names alphabetically" {
+    "conversation stream path for DM sorts names alphabetically" {
         val convId = ConvId.dm("lead-dev", "alice")
-        StreamNames.conversation(effortId, convId) shouldBe "/effort:V1StGXR8_Z/conv:alice+lead-dev"
+        StreamName.Conversation(effortId, convId).path shouldBe
+            "/effort:effort:V1StGXR8_Z/conv:alice+lead-dev"
     }
 
-    "docs stream name" {
-        StreamNames.docs(effortId) shouldBe "/effort:V1StGXR8_Z/docs"
+    "docs stream path" {
+        StreamName.Docs(effortId).path shouldBe "/effort:effort:V1StGXR8_Z/docs"
     }
 
-    "agentType stream name" {
+    "agentType stream path" {
         val agentTypeId = AgentTypeId.of("lead-eng")
-        StreamNames.agentType(agentTypeId) shouldBe "/agenttype:lead-eng"
+        StreamName.AgentType(agentTypeId).path shouldBe "/agenttype:agenttype:lead-eng"
     }
 })

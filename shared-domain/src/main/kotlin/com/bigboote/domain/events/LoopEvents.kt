@@ -20,9 +20,20 @@ import kotlin.uuid.Uuid
  * Note that these events do not call out the ID of the agent they apply to,
  * as the agent ID is inferred from the context in which the event is found (i.e., the stream ID).
  */
+/**
+ * Events for the Loop execution stream: `/effort:{id}/agent:{id}/loop`
+ *
+ * Both [AgentId] and [EffortId] are inherent to [StreamName.Loop] and are no longer
+ * duplicated in event payloads. Retrieve them via [StreamName.Loop.agentId] and
+ * [StreamName.Loop.effortId] from [com.bigboote.events.eventstore.EventEnvelope.streamName].
+ *
+ * [LLMRequestSent] and [LLMResponseReceived] moved here from [AgentEvent] — they are
+ * execution-scoped events that belong on this stream rather than the lifecycle stream.
+ *
+ * See Architecture doc Change Document v1.0 Section 5.3 / 5.4.
+ */
 @Serializable
-sealed interface LoopEvent :
-    Event {
+sealed interface LoopEvent {
 
     /**
      * The agent loop started a step.
@@ -114,4 +125,29 @@ sealed interface LoopEvent :
         val from: CollaboratorName,
         val content: List<JsonElement>
     ) : LoopEvent
+
+    /** Moved from [AgentEvent]: LLM request are execution-scoped, not lifecycle-scoped. */
+    @Serializable
+    @SerialName("LLMRequestSent")
+    data class LLMRequestSent(
+        val model: String,
+        val inputTokens: Int,
+        val occurredAt: Instant,
+    ) : LoopEvent
+
+    /** Moved from [AgentEvent]: LLM responses are execution-scoped, not lifecycle-scoped. */
+    @Serializable
+    @SerialName("LLMResponseReceived")
+    data class LLMResponseReceived(
+        val outputTokens: Int,
+        val occurredAt: Instant,
+    ) : LoopEvent
 }
+
+/**
+ * Safely cast an untyped [StreamName] to [StreamName.Loop].
+ * Use this in [EventStore.subscribeToAll] handlers after a type-check on `envelope.data`.
+ */
+fun StreamName<*>.asLoopStream(): StreamName.Loop =
+    this as? StreamName.Loop
+        ?: error("Expected StreamName.Loop but got ${this::class.simpleName} for path '$path'")

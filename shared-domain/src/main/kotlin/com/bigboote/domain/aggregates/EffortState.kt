@@ -6,17 +6,15 @@ import com.bigboote.domain.values.*
 import kotlinx.datetime.Instant
 
 data class EffortState(
-    val effortId: EffortId,
     val name: String,
     val goal: String,
     val status: EffortStatus,
     val collaborators: List<CollaboratorSpec>,
     val leadName: CollaboratorName,
     val version: Long,
-) {
-    fun apply(event: EffortEvent): EffortState = when (event) {
+): NoContextStreamState<EffortEvent, EffortState>() {
+    override fun apply(event: EffortEvent): EffortState = when (event) {
         is EffortCreated -> EffortState(
-            effortId = event.effortId,
             name = event.name,
             goal = event.goal,
             status = EffortStatus.CREATED,
@@ -24,6 +22,7 @@ data class EffortState(
             leadName = event.leadName,
             version = 1,
         )
+
         is EffortStarted -> copy(status = EffortStatus.ACTIVE, version = version + 1)
         is EffortPaused -> copy(status = EffortStatus.PAUSED, version = version + 1)
         is EffortResumed -> copy(status = EffortStatus.ACTIVE, version = version + 1)
@@ -31,15 +30,18 @@ data class EffortState(
         is AgentSpawnRequested -> copy(version = version + 1)
     }
 
-    companion object {
-        val EMPTY = EffortState(
-            effortId = EffortId("effort:__empty__"),
-            name = "",
-            goal = "",
-            status = EffortStatus.CREATED,
-            collaborators = emptyList(),
-            leadName = CollaboratorName.Individual("__empty__"),
-            version = 0,
-        )
+    companion object: StreamStateStarter<EffortEvent, EffortState> {
+        override fun start(entry: EventLogEntry<EffortEvent>): EffortState {
+            val event = entry.event as? EffortCreated ?:
+                throw IllegalArgumentException("Not a EffortCreated event")
+            return EffortState(
+                name = event.name,
+                goal = event.goal,
+                status = EffortStatus.CREATED,
+                collaborators = event.collaborators,
+                leadName = event.leadName,
+                version = 1,
+            )
+        }
     }
 }

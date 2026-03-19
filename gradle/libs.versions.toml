@@ -15,6 +15,8 @@ mockk               = "1.13.13"
 testcontainers      = "1.20.4"
 hikari              = "6.2.1"
 jnanoid             = "2.0.0"
+aws-sdk-java        = "2.29.46"
+node-gradle         = "7.0.2"
 
 [libraries]
 kotlinGradle            = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -34,6 +36,7 @@ ktor-server-test-host    = { module = "io.ktor:ktor-server-test-host",         v
 ktor-client-core         = { module = "io.ktor:ktor-client-core",              version.ref = "ktor" }
 ktor-client-cio          = { module = "io.ktor:ktor-client-cio",               version.ref = "ktor" }
 ktor-client-content-neg  = { module = "io.ktor:ktor-client-content-negotiation",version.ref = "ktor" }
+ktor-client-mock         = { module = "io.ktor:ktor-client-mock",              version.ref = "ktor" }
 
 # Serialization
 ktor-serialization-json  = { module = "io.ktor:ktor-serialization-kotlinx-json",version.ref = "ktor" }
@@ -68,6 +71,9 @@ kotlinx-datetime         = { module = "org.jetbrains.kotlinx:kotlinx-datetime", 
 # NanoID
 jnanoid                  = { module = "com.aventrix.jnanoid:jnanoid",           version.ref = "jnanoid" }
 
+# AWS SDK v2 (Java)
+aws-sdk-java-s3          = { module = "software.amazon.awssdk:s3",              version.ref = "aws-sdk-java" }
+
 # Logging
 logback-classic          = { module = "ch.qos.logback:logback-classic",        version.ref = "logback" }
 
@@ -87,3 +93,4 @@ testcontainers-junit     = { module = "org.testcontainers:junit-jupiter",       
 kotlin-jvm               = { id = "org.jetbrains.kotlin.jvm",                   version.ref = "kotlin" }
 kotlin-serialization     = { id = "org.jetbrains.kotlin.plugin.serialization",  version.ref = "kotlin" }
 ktor                     = { id = "io.ktor.plugin",                             version.ref = "ktor" }
+node-gradle              = { id = "com.github.node-gradle.node",                version.ref = "node-gradle" }

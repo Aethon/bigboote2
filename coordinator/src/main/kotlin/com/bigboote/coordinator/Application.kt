@@ -1,5 +1,13 @@
 package com.bigboote.coordinator
 
+import com.bigboote.coordinator.koin.*
+import com.bigboote.coordinator.projections.ProjectionRunner
+import com.bigboote.coordinator.projections.db.AgentTypeTable
+import com.bigboote.coordinator.projections.db.ConversationTable
+import com.bigboote.coordinator.projections.db.DocumentTable
+import com.bigboote.coordinator.projections.db.MessageTable
+import com.bigboote.coordinator.projections.db.EffortTable
+import com.bigboote.coordinator.reactors.ReactorRunner
 import com.bigboote.infra.config.BigbooteConfig
 import com.bigboote.infra.db.DatabaseFactory
 import com.bigboote.infra.koin.sharedInfraModule
@@ -8,7 +16,6 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
-import com.bigboote.coordinator.koin.*
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("com.bigboote.coordinator.Application")
@@ -33,15 +40,42 @@ fun main() {
     val config = koin.get<BigbooteConfig>()
     val databaseFactory = koin.get<DatabaseFactory>()
 
-    // Connect to Postgres — DatabaseFactory.connect() initializes the pool
-    // and logs internally; we discard the returned Database reference here
-    // because Exposed's Database is not on coordinator's compile classpath.
+    // Connect to Postgres — DatabaseFactory.connect() initializes the pool.
     databaseFactory.connect()
     logger.info("Postgres connection established at {}", config.database.jdbcUrl)
+
+    // Create or migrate Postgres schema for all read-model tables.
+    // SchemaUtils.createMissingTablesAndColumns is idempotent — safe on every restart.
+    databaseFactory.createTables(EffortTable, AgentTypeTable, ConversationTable, MessageTable, DocumentTable)
+    logger.info("Database schema initialised")
 
     // KurrentDB client is eagerly created by Koin; log confirmation
     logger.info("KurrentDB connection configured at {}", config.kurrent.connectionString)
 
-    embeddedServer(Netty, port = 8080, module = Application::configureServer)
+    // Start projections — must happen after DB schema is ready so that start()
+    // can read known effort IDs from EffortTable for catch-up subscriptions.
+    val projectionRunner = koin.get<ProjectionRunner>()
+    projectionRunner.start()
+    logger.info("ProjectionRunner started")
+
+    // Start reactors — must happen after projections are running so that the
+    // AgentType read model is populated before SpawnReactor tries to look up dockerImage.
+    val reactorRunner = koin.get<ReactorRunner>()
+    reactorRunner.start()
+    logger.info("ReactorRunner started")
+
+    // Graceful shutdown: stop reactors, then projection subscriptions, then close the DB pool.
+    Runtime.getRuntime().addShutdownHook(Thread {
+        logger.info("Shutdown hook: stopping reactors, projections, and closing DB pool...")
+        reactorRunner.stop()
+        projectionRunner.stop()
+        databaseFactory.close()
+        logger.info("Shutdown complete")
+    })
+
+    // Lambda form required so that configureServer() can receive the default koinModules
+    // list (COORDINATOR_KOIN_MODULES). The module = Application::configureServer form
+    // only works for zero-argument extension functions.
+    embeddedServer(Netty, port = 8080) { configureServer() }
         .start(wait = true)
 }
