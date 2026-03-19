@@ -6,6 +6,7 @@ import com.bigboote.domain.events.ConversationEvent.MessagePosted
 import com.bigboote.domain.events.asConversationStream
 import com.bigboote.domain.values.ConvId
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.EventStore
 import com.bigboote.events.eventstore.EventSubscription
 import org.slf4j.LoggerFactory
@@ -104,7 +105,7 @@ class MessageDeliveryReactor(
                 continue
             }
             try {
-                proxy.deliverMessage(event)
+                proxy.deliverMessage(StreamName.Conversation(effortId, convId), event)
             } catch (e: Exception) {
                 logger.warn(
                     "MessageDeliveryReactor: failed to deliver message {} to {}: {}",

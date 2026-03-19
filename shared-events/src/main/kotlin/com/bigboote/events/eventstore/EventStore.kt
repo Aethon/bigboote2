@@ -1,6 +1,7 @@
 package com.bigboote.events.eventstore
 
 import com.bigboote.domain.values.StreamName
+import kotlin.reflect.KClass
 
 /**
  * Interface for event store operations against KurrentDB.
@@ -43,11 +44,12 @@ interface EventStore {
      * @param maxCount Maximum number of events to read
      * @return ReadResult containing deserialized event envelopes
      */
-    suspend fun readStreamForward(
-        streamName: StreamName<*>,
+    suspend fun <E: Any> readStreamForward(
+        eventKlass: KClass<E>,
+        streamName: StreamName<E>,
         fromVersion: Long = 0L,
         maxCount: Int = Int.MAX_VALUE,
-    ): ReadResult
+    ): ReadResult<E>
 
     /**
      * Subscribe to a stream from a given position (catch-up subscription).

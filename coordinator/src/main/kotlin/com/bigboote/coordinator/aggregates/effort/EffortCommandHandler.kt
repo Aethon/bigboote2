@@ -5,6 +5,7 @@ import com.bigboote.domain.aggregates.EffortState
 import com.bigboote.domain.aggregates.EffortStatus
 import com.bigboote.domain.commands.EffortCommand.*
 import com.bigboote.domain.errors.DomainError
+import com.bigboote.domain.events.EffortEvent
 import com.bigboote.domain.events.EffortEvent.*
 import com.bigboote.domain.values.AgentId
 import com.bigboote.domain.values.CollaboratorType
@@ -72,9 +73,9 @@ class EffortCommandHandlerImpl(
      * each AGENT collaborator. Effort must be in CREATED status.
      */
     override suspend fun handle(cmd: StartEffort) {
-        val (state, version) = loadEffort(cmd.effortId)
+        val (state, version) = maybeLoadEffort(cmd.effortId) ?: throw DomainException(DomainError.EffortNotFound(cmd.effortId))
 
-        requireTransition(state, EffortStatus.CREATED, EffortStatus.ACTIVE)
+        requireTransition(cmd.effortId, state, EffortStatus.CREATED, EffortStatus.ACTIVE)
 
         val events = buildList {
             add(EffortStarted(clock.now()))
@@ -112,9 +113,9 @@ class EffortCommandHandlerImpl(
      * Pause an active Effort. Emits [EffortPaused].
      */
     override suspend fun handle(cmd: PauseEffort) {
-        val (state, version) = loadEffort(cmd.effortId)
+        val (state, version) = maybeLoadEffort(cmd.effortId) ?: throw DomainException(DomainError.EffortNotFound(cmd.effortId))
 
-        requireTransition(state, EffortStatus.ACTIVE, EffortStatus.PAUSED)
+        requireTransition(cmd.effortId, state, EffortStatus.ACTIVE, EffortStatus.PAUSED)
 
         repo.append(
             StreamName.Effort(cmd.effortId),
@@ -129,9 +130,9 @@ class EffortCommandHandlerImpl(
      * Resume a paused Effort. Emits [EffortResumed].
      */
     override suspend fun handle(cmd: ResumeEffort) {
-        val (state, version) = loadEffort(cmd.effortId)
+        val (state, version) = maybeLoadEffort(cmd.effortId) ?: throw DomainException(DomainError.EffortNotFound(cmd.effortId))
 
-        requireTransition(state, EffortStatus.PAUSED, EffortStatus.ACTIVE)
+        requireTransition(cmd.effortId, state, EffortStatus.PAUSED, EffortStatus.ACTIVE)
 
         repo.append(
             StreamName.Effort(cmd.effortId),
@@ -146,7 +147,7 @@ class EffortCommandHandlerImpl(
      * Close an Effort. Emits [EffortClosed]. Can close from ACTIVE or PAUSED.
      */
     override suspend fun handle(cmd: CloseEffort) {
-        val (state, version) = loadEffort(cmd.effortId)
+        val (state, version) = maybeLoadEffort(cmd.effortId) ?: throw DomainException(DomainError.EffortNotFound(cmd.effortId))
 
         if (state.status == EffortStatus.CLOSED) {
             throw DomainException(DomainError.EffortAlreadyClosed(cmd.effortId))
@@ -168,23 +169,19 @@ class EffortCommandHandlerImpl(
 
     // ---- helpers ----
 
-    private suspend fun loadEffort(effortId: EffortId): Pair<EffortState, Long> {
-        val (state, version) = repo.load(
+    private suspend fun maybeLoadEffort(effortId: EffortId): Pair<EffortState, Long>? {
+        return repo.maybeLoad(
+            EffortEvent::class,
             StreamName.Effort(effortId),
-            EffortState.EMPTY,
-        ) { s, event -> if (event is com.bigboote.domain.events.EffortEvent) s.apply(event) else s }
-
-        if (state.effortId.value == "effort:__empty__") {
-            throw DomainException(DomainError.EffortNotFound(effortId))
-        }
-
-        return state to version
+            EffortState::start,
+            EffortState::apply
+        )
     }
 
-    private fun requireTransition(state: EffortState, requiredFrom: EffortStatus, to: EffortStatus) {
+    private fun requireTransition(effortId: EffortId, state: EffortState, requiredFrom: EffortStatus, to: EffortStatus) {
         if (state.status != requiredFrom) {
             throw DomainException(
-                DomainError.InvalidEffortTransition(state.effortId, state.status, to)
+                DomainError.InvalidEffortTransition(effortId, state.status, to)
             )
         }
     }

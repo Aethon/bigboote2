@@ -4,6 +4,7 @@ import com.bigboote.coordinator.proxy.ExternalProxy
 import com.bigboote.domain.events.ConversationEvent.MessagePosted
 import com.bigboote.domain.values.CollaboratorName
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 import io.ktor.websocket.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -63,10 +64,10 @@ class NativeMessagingAdapter {
         override val collaboratorName = collaboratorName
         override val effortId = effortId
 
-        override suspend fun deliverMessage(event: MessagePosted) {
+        override suspend fun deliverMessage(streamName: StreamName.Conversation, event: MessagePosted) {
             val payload = WsDeliveryPayload(
                 type      = "message",
-                convId    = event.convId,
+                convId    = streamName.convId.value,
                 from      = event.from.toString(),
                 body      = event.body,
                 messageId = event.messageId.value,

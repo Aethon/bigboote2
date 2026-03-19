@@ -1,5 +1,8 @@
 package com.bigboote.infra.eventstore
 
+import com.bigboote.domain.aggregates.EventContext
+import com.bigboote.domain.aggregates.EventLogEntry
+import com.bigboote.domain.aggregates.EventLogEntryImpl
 import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.AppendResult
 import com.bigboote.events.eventstore.EventEnvelope
@@ -29,6 +32,8 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import org.slf4j.LoggerFactory
+import kotlin.reflect.KClass
+import kotlin.reflect.full.cast
 
 /**
  * KurrentDB implementation of the [EventStore] interface.
@@ -73,11 +78,12 @@ class KurrentEventStore(
         return AppendResult(nextExpectedVersion = nextExpected)
     }
 
-    override suspend fun readStreamForward(
-        streamName: StreamName<*>,
+    override suspend fun <E: Any> readStreamForward(
+        eventKlass: KClass<E>,
+        streamName: StreamName<E>,
         fromVersion: Long,
         maxCount: Int,
-    ): ReadResult {
+    ): ReadResult<E> {
         val streamId = streamName.path
         val options = ReadStreamOptions.get()
             .forwards()
@@ -95,7 +101,7 @@ class KurrentEventStore(
         }
 
         val events = readResult.events
-        val envelopes = events.map { it.toEventEnvelope(streamName) }
+        val envelopes = events.map { it.toStreamEntry(streamName, eventKlass) }
         val lastPosition = if (events.isEmpty()) -1L
             else events.last().originalEvent.revision
 
@@ -235,6 +241,23 @@ class KurrentEventStore(
             position = recorded.revision,
             data = data,
             timestamp = Instant.fromEpochMilliseconds(recorded.created.toEpochMilli()),
+        )
+    }
+
+    /**
+     * Convert a [ResolvedEvent] to an [EventEnvelope] for a known typed stream.
+     * The [streamName] carries the contextual identity (effortId, agentId, etc.).
+     */
+    private fun <E: Any> ResolvedEvent.toStreamEntry(streamName: StreamName<E>, eventKlass: KClass<E>): EventLogEntry<E> {
+        val recorded = this.originalEvent
+        val data = EventDeserializer.deserialize(recorded)
+        return EventLogEntryImpl(
+            streamName = streamName,
+            event = eventKlass.cast(data),
+            context = EventContext(
+                streamPosition = recorded.revision,
+                storePosition = recorded.position.commitUnsigned
+            )
         )
     }
 

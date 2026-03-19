@@ -1,7 +1,6 @@
 package com.bigboote.coordinator.aggregates.agenttype
 
 import com.bigboote.coordinator.aggregates.AggregateRepository
-import com.bigboote.coordinator.api.error.DomainException
 import com.bigboote.domain.aggregates.AgentTypeState
 import com.bigboote.domain.commands.AgentTypeCommand.CreateAgentType
 import com.bigboote.domain.commands.AgentTypeCommand.UpdateAgentType
@@ -25,6 +24,7 @@ private val logger = LoggerFactory.getLogger(AgentTypeCommandHandlerImpl::class.
 interface AgentTypeCommandHandler {
     /** Create a new AgentType. Returns the created [AgentTypeId]. */
     suspend fun handle(cmd: CreateAgentType): AgentTypeId
+
     /** Update an existing AgentType. */
     suspend fun handle(cmd: UpdateAgentType)
 }
@@ -59,15 +59,15 @@ class AgentTypeCommandHandlerImpl(
      */
     override suspend fun handle(cmd: CreateAgentType): AgentTypeId {
         val event = AgentTypeCreated(
-            name          = cmd.name,
-            model         = cmd.model,
-            systemPrompt  = cmd.systemPrompt,
-            maxTokens     = cmd.maxTokens,
-            temperature   = cmd.temperature,
-            tools         = cmd.tools,
-            dockerImage   = cmd.dockerImage,
+            name = cmd.name,
+            model = cmd.model,
+            systemPrompt = cmd.systemPrompt,
+            maxTokens = cmd.maxTokens,
+            temperature = cmd.temperature,
+            tools = cmd.tools,
+            dockerImage = cmd.dockerImage,
             spawnStrategy = cmd.spawnStrategy,
-            createdAt     = clock.now(),
+            createdAt = clock.now(),
         )
 
         repo.append(
@@ -91,24 +91,25 @@ class AgentTypeCommandHandlerImpl(
      * for instances spawned after this update.
      */
     override suspend fun handle(cmd: UpdateAgentType) {
-        val (_, version) = loadAgentType(cmd.agentTypeId)
+        val loaded = loadAgentType(cmd.agentTypeId) ?:
+            throw DomainException(DomainError.AgentTypeNotFound(cmd.agentTypeId))
 
         val event = AgentTypeUpdated(
-            name          = cmd.name,
-            model         = cmd.model,
-            systemPrompt  = cmd.systemPrompt,
-            maxTokens     = cmd.maxTokens,
-            temperature   = cmd.temperature,
-            tools         = cmd.tools,
-            dockerImage   = cmd.dockerImage,
+            name = cmd.name,
+            model = cmd.model,
+            systemPrompt = cmd.systemPrompt,
+            maxTokens = cmd.maxTokens,
+            temperature = cmd.temperature,
+            tools = cmd.tools,
+            dockerImage = cmd.dockerImage,
             spawnStrategy = cmd.spawnStrategy,
-            updatedAt     = clock.now(),
+            updatedAt = clock.now(),
         )
 
         repo.append(
             StreamName.AgentType(cmd.agentTypeId),
             listOf(event),
-            ExpectedVersion.Exact(version),
+            ExpectedVersion.Exact(loaded.second),
         )
 
         logger.info("AgentType updated: {}", cmd.agentTypeId)
@@ -116,16 +117,13 @@ class AgentTypeCommandHandlerImpl(
 
     // ------------------------------------------------------------------ helpers
 
-    private suspend fun loadAgentType(agentTypeId: AgentTypeId): Pair<AgentTypeState, Long> {
-        val (state, version) = repo.load(
+    private suspend fun loadAgentType(agentTypeId: AgentTypeId) =
+        repo.maybeLoad(
+            AgentTypeEvent::class,
             StreamName.AgentType(agentTypeId),
-            AgentTypeState.EMPTY,
-        ) { s, event ->
-            if (event is AgentTypeEvent) s.apply(event) else s
-        }
-
-        return state to version
-    }
+            AgentTypeState::start,
+            AgentTypeState::apply
+        )
 }
 
 /**

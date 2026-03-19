@@ -3,6 +3,7 @@ package com.bigboote.coordinator.proxy
 import com.bigboote.domain.events.ConversationEvent.MessagePosted
 import com.bigboote.domain.values.CollaboratorName
 import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.values.StreamName
 
 /**
  * Base abstraction over all Collaborator types in an Effort.
@@ -31,5 +32,5 @@ interface CollaboratorProxy {
      * delivery via the agent's SSE gateway subscription.
      * For [ExternalProxy]: sends the message JSON frame over the collaborator's WebSocket.
      */
-    suspend fun deliverMessage(event: MessagePosted)
+    suspend fun deliverMessage(streamName: StreamName.Conversation, event: MessagePosted)
 }

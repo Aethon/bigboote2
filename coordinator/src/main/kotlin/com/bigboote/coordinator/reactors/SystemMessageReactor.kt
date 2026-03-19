@@ -77,7 +77,7 @@ class SystemMessageReactor(
     private suspend fun handleLifecycle(effortId: EffortId, verb: String) {
         logger.debug("SystemMessageReactor: effort {} {}", effortId, verb)
 
-        val state = loadEffortState(effortId)
+        val state = loadEffortState(effortId) ?: throw IllegalStateException("Effort not found: $effortId")
 
         val body = "Effort '${state.name}' has $verb."
 
@@ -95,13 +95,12 @@ class SystemMessageReactor(
         }
     }
 
-    private suspend fun loadEffortState(effortId: EffortId): EffortState {
-        val (state, _) = repo.load(
+    private suspend fun loadEffortState(effortId: EffortId): EffortState? {
+        return repo.maybeLoad(
+            EffortEvent::class,
             StreamName.Effort(effortId),
-            EffortState.EMPTY,
-        ) { s, event ->
-            if (event is EffortEvent) s.apply(event) else s
-        }
-        return state
+            EffortState::start,
+            EffortState::apply
+        )?.first
     }
 }

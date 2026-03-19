@@ -6,6 +6,7 @@ import com.bigboote.coordinator.storage.S3DocumentStorage
 import com.bigboote.domain.aggregates.DocumentStoreState
 import com.bigboote.domain.commands.DocumentCommand.*
 import com.bigboote.domain.errors.DomainError
+import com.bigboote.domain.events.DocumentEvent
 import com.bigboote.domain.events.DocumentEvent.*
 import com.bigboote.domain.values.EffortId
 import com.bigboote.domain.values.StreamName
@@ -44,7 +45,7 @@ class DocumentCommandHandler(
      * Emits [DocumentCreated] on the effort docs stream.
      */
     suspend fun handle(cmd: CreateDocument, content: String) {
-        val (state, version) = loadDocumentStore(cmd.effortId)
+        val loaded = loadDocumentStore(cmd.effortId)
 
         // DocumentId is generated fresh (NanoId) by the route handler, so collisions are
         // astronomically unlikely. No dedicated DocumentAlreadyExists error in Phase 14.
@@ -55,17 +56,17 @@ class DocumentCommandHandler(
 
         val event = DocumentCreated(
             documentId = cmd.documentId,
-            name       = cmd.name,
-            mimeType   = cmd.mimeType,
-            s3Key      = s3Key,
-            createdBy  = cmd.createdBy,
-            createdAt  = clock.now(),
+            name = cmd.name,
+            mimeType = cmd.mimeType,
+            s3Key = s3Key,
+            createdBy = cmd.createdBy,
+            createdAt = clock.now(),
         )
 
         repo.append(
             StreamName.Docs(cmd.effortId),
             listOf(event),
-            if (version < 0) ExpectedVersion.NoStream else ExpectedVersion.Exact(version),
+            if (loaded == null) ExpectedVersion.NoStream else ExpectedVersion.Exact(loaded.second),
         )
 
         logger.info("Document created: {} in effort {}", cmd.documentId, cmd.effortId)
@@ -80,7 +81,7 @@ class DocumentCommandHandler(
      * Throws [DocumentNotFound] if the document does not exist or has been deleted.
      */
     suspend fun handle(cmd: UpdateDocument, content: String) {
-        val (state, version) = loadDocumentStore(cmd.effortId)
+        val (state, version) = loadDocumentStore(cmd.effortId) ?: throw DomainException(DomainError.DocumentNotFound(cmd.documentId))
 
         val record = state.documents[cmd.documentId]
             ?: throw DomainException(DomainError.DocumentNotFound(cmd.documentId))
@@ -93,9 +94,9 @@ class DocumentCommandHandler(
 
         val event = DocumentUpdated(
             documentId = cmd.documentId,
-            s3Key      = s3Key,
-            updatedBy  = cmd.updatedBy,
-            updatedAt  = clock.now(),
+            s3Key = s3Key,
+            updatedBy = cmd.updatedBy,
+            updatedAt = clock.now(),
         )
 
         repo.append(
@@ -116,7 +117,7 @@ class DocumentCommandHandler(
      * Throws [DocumentNotFound] if the document does not exist or is already deleted.
      */
     suspend fun handle(cmd: DeleteDocument) {
-        val (state, version) = loadDocumentStore(cmd.effortId)
+        val (state, version) = loadDocumentStore(cmd.effortId) ?: throw DomainException(DomainError.DocumentNotFound(cmd.documentId))
 
         val record = state.documents[cmd.documentId]
             ?: throw DomainException(DomainError.DocumentNotFound(cmd.documentId))
@@ -125,8 +126,8 @@ class DocumentCommandHandler(
 
         val event = DocumentDeleted(
             documentId = cmd.documentId,
-            deletedBy  = cmd.deletedBy,
-            deletedAt  = clock.now(),
+            deletedBy = cmd.deletedBy,
+            deletedAt = clock.now(),
         )
 
         repo.append(
@@ -140,13 +141,11 @@ class DocumentCommandHandler(
 
     // ---- private helpers ----
 
-    private suspend fun loadDocumentStore(
-        effortId: EffortId,
-    ): Pair<DocumentStoreState, Long> =
-        repo.load(
+    private suspend fun loadDocumentStore(effortId: EffortId) =
+        repo.maybeLoad(
+            DocumentEvent::class,
             StreamName.Docs(effortId),
-            DocumentStoreState.empty(effortId),
-        ) { s, event ->
-            if (event is com.bigboote.domain.events.DocumentEvent) s.apply(event) else s
-        }
+            DocumentStoreState::start,
+            DocumentStoreState::apply
+        )
 }

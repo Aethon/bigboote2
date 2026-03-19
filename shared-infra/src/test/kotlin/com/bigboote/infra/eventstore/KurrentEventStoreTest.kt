@@ -1,5 +1,7 @@
 package com.bigboote.infra.eventstore
 
+import com.bigboote.domain.aggregates.EventContext
+import com.bigboote.domain.events.EffortEvent
 import com.bigboote.domain.events.EffortEvent.EffortCreated
 import com.bigboote.domain.events.EffortEvent.EffortStarted
 import com.bigboote.domain.values.*
@@ -79,15 +81,14 @@ class KurrentEventStoreTest : StringSpec({
         appendResult.nextExpectedVersion shouldBeGreaterThanOrEqual 0L
 
         // Read back
-        val readResult = store.readStreamForward(streamName)
+        val readResult = store.readStreamForward(EffortEvent::class, streamName)
         readResult.events shouldHaveSize 1
 
-        val envelope = readResult.events.first()
-        envelope.streamName shouldBe streamName
-        envelope.eventType shouldBe "EffortCreated"
-        envelope.position shouldBe 0L
+        val entry = readResult.events.first()
+        entry.streamName shouldBe streamName
+        entry.context shouldBe EventContext(0L, 0L)
 
-        val deserialized = envelope.data
+        val deserialized = entry.event
         deserialized.shouldBeInstanceOf<EffortCreated>()
         deserialized.name shouldBe "Integration test effort"
         deserialized.goal shouldBe "Verify KurrentEventStore append and read"
@@ -115,18 +116,18 @@ class KurrentEventStoreTest : StringSpec({
         store.appendToStream(streamName, listOf(started), ExpectedVersion.Exact(0))
 
         // Read all
-        val allEvents = store.readStreamForward(streamName)
+        val allEvents = store.readStreamForward(EffortEvent::class, streamName)
         allEvents.events shouldHaveSize 2
 
         // Read from version 1
-        val fromOne = store.readStreamForward(streamName, fromVersion = 1)
+        val fromOne = store.readStreamForward(EffortEvent::class, streamName, fromVersion = 1)
         fromOne.events shouldHaveSize 1
-        fromOne.events.first().data.shouldBeInstanceOf<EffortStarted>()
+        fromOne.events.first().event.shouldBeInstanceOf<EffortStarted>()
     }
 
     "readStreamForward on non-existent stream returns empty" {
         val nonExistentStream = StreamName.Effort(EffortId("effort:nonexistent-stream-12345"))
-        val result = store.readStreamForward(nonExistentStream)
+        val result = store.readStreamForward(EffortEvent::class, nonExistentStream)
         result.events shouldHaveSize 0
         result.lastStreamPosition shouldBe -1L
     }
