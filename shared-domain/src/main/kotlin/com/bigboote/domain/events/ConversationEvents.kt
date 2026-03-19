@@ -6,7 +6,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-sealed interface ConversationEvent {
+sealed interface ConversationEvent :
+Event {
 
     @Serializable
     @SerialName("ConversationCreated")
