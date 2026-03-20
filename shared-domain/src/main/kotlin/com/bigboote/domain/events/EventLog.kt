@@ -1,7 +1,6 @@
 package com.bigboote.domain.events
 
 import com.bigboote.domain.values.StreamName
-import com.xemantic.ai.anthropic.json.toPrettyJson
 import kotlinx.serialization.Serializable
 import kotlin.reflect.KClass
 
