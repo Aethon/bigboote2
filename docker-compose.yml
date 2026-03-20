@@ -1,0 +1,80 @@
+# ---------------------------------------------------------------------------
+# Bigboote — local development infrastructure
+#
+# Usage:
+#   docker compose up -d          # start all services
+#   docker compose up -d --wait   # start and block until healthy
+#   docker compose down            # stop all services
+#   docker compose down -v         # stop and remove volumes (fresh start)
+#
+# Then run the app with default env-var values:
+#   ./gradlew :coordinator:run
+#
+# For S3 (LocalStack), set these env vars or use .env.development:
+#   BIGBOOTE_S3_ENDPOINT=http://localhost:4566
+#   BIGBOOTE_S3_ACCESS_KEY=test
+#   BIGBOOTE_S3_SECRET_KEY=test
+# ---------------------------------------------------------------------------
+
+services:
+
+  # --- PostgreSQL (projections / read models) --------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: bigboote-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: bigboote
+      POSTGRES_USER: bigboote
+      POSTGRES_PASSWORD: bigboote
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bigboote -d bigboote"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # --- KurrentDB / EventStoreDB (event sourcing) ----------------------------
+  kurrentdb:
+    image: eventstore/eventstore:24.10
+    container_name: bigboote-kurrentdb
+    ports:
+      - "2113:2113"   # HTTP + gRPC (client)
+    environment:
+      EVENTSTORE_INSECURE: "true"
+      EVENTSTORE_CLUSTER_SIZE: 1
+      EVENTSTORE_RUN_PROJECTIONS: "None"
+      EVENTSTORE_MEM_DB: "false"
+      EVENTSTORE_DB: /var/lib/eventstore/data
+      EVENTSTORE_INDEX: /var/lib/eventstore/index
+      EVENTSTORE_LOG: /var/log/eventstore
+    volumes:
+      - esdata:/var/lib/eventstore
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:2113/health/live || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # --- LocalStack (S3-compatible object storage) -----------------------------
+  localstack:
+    image: localstack/localstack:latest
+    container_name: bigboote-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: s3
+      DEFAULT_REGION: us-east-1
+      # Persist data across restarts (optional; remove for ephemeral S3)
+      PERSISTENCE: 1
+    volumes:
+      - lsdata:/var/lib/localstack
+      - ./infra/localstack/init-s3.sh:/etc/localstack/init/ready.d/init-s3.sh:ro
+
+volumes:
+  pgdata:
+  esdata:
+  lsdata:
