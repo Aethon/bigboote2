@@ -58,14 +58,14 @@ class AgentInstanceStateTest : StringSpec({
     "apply StepStarted transitions loopStatus to IN_STEP" {
         val state = AgentInstanceState.EMPTY
             .apply(startedEvent)
-            .apply(StepStarted())
+            .apply(StepStarted)
         state.loopStatus shouldBe LoopStatus.IN_STEP
     }
 
     "apply StepEnded sets loopStatus to result" {
         val state = AgentInstanceState.EMPTY
             .apply(startedEvent)
-            .apply(StepStarted())
+            .apply(StepStarted)
             .apply(StepEnded(LoopStatus.PENDING))
         state.loopStatus shouldBe LoopStatus.PENDING
     }
@@ -73,7 +73,7 @@ class AgentInstanceStateTest : StringSpec({
     "apply StepEnded with IDLE result" {
         val state = AgentInstanceState.EMPTY
             .apply(startedEvent)
-            .apply(StepStarted())
+            .apply(StepStarted)
             .apply(StepEnded(LoopStatus.IDLE))
         state.loopStatus shouldBe LoopStatus.IDLE
     }

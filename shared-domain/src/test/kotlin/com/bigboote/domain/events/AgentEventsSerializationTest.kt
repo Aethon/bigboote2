@@ -13,7 +13,6 @@ class AgentEventsSerializationTest : StringSpec({
 
     val json = Json { encodeDefaults = true }
     val now = Clock.System.now()
-    val agentId = AgentId("agent:test123")
 
     "AgentStarted round-trip" {
         val event: AgentEvent = AgentStarted(

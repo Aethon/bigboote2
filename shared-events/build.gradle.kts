@@ -9,6 +9,7 @@ dependencies {
     implementation(libs.kotlinx.datetime)
     implementation(libs.kurrentdb.client)
 
+    testImplementation(project(":shared-domain"))
     testImplementation(libs.kotlin.reflect)
     testImplementation(libs.kotest.runner)
     testImplementation(libs.kotest.assertions)

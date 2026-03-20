@@ -1,11 +1,13 @@
 package com.bigboote.domain.events
 
 import com.bigboote.domain.values.StreamName
+import kotlinx.serialization.Serializable
 import kotlin.reflect.KClass
 
 /**
  * Data that describes an event in the event log.
  */
+@Serializable
 sealed interface Event
 
 data class EventContext(

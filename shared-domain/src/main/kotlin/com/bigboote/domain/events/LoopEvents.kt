@@ -39,14 +39,13 @@ sealed interface LoopEvent :
      */
     @Serializable
     @SerialName("StepStarted")
-    class StepStarted(
-    ) : LoopEvent
+    object StepStarted
+        : LoopEvent
 
     /**
      * An agent loop step ended.
      *
      * @property result The result of the step.
-     * @property endedAt The time the step ended.
      */
     @Serializable
     @SerialName("StepEnded")
