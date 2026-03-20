@@ -56,7 +56,7 @@ class KurrentEventStore(
     private val subscriptionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     @Suppress("UNCHECKED_CAST")
-    override suspend fun <E : Any> appendToStream(
+    override suspend fun <E : Event> appendToStream(
         streamName: StreamName<E>,
         events: List<E>,
         expectedVersion: ExpectedVersion,
@@ -108,7 +108,7 @@ class KurrentEventStore(
         return ReadResult(events = envelopes, lastStreamPosition = lastPosition)
     }
 
-    override fun <E : Any> subscribeToStream(
+    override fun <E : Event> subscribeToStream(
         streamName: StreamName<E>,
         fromVersion: Long,
         handler: suspend (EventEnvelope<E>) -> Unit,
@@ -145,7 +145,7 @@ class KurrentEventStore(
         return KurrentEventSubscription(subscription)
     }
 
-    override fun <E : Any> subscribePersistent(
+    override fun <E : Event> subscribePersistent(
         streamName: StreamName<E>,
         groupName: String,
         handler: suspend (EventEnvelope<E>) -> Unit,

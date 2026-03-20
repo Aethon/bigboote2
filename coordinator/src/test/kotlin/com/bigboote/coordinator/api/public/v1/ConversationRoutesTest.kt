@@ -38,31 +38,28 @@ import org.koin.dsl.module
  * All requests to /api/v1/{*} require `Authorization: Bearer <token>`.
  * [authenticatedClient] provides a test client pre-configured with a stub bearer token.
  *
- * URL encoding note: The '#' character in channel ConvIds (e.g. "conv:#general") must
- * be percent-encoded as '%23' in URL path segments. The Ktor routing engine decodes
- * '%23' back to '#' when populating path parameters. Mock expectations use the decoded
- * form ("conv:#general"), while URL paths use the encoded form ("conv:%23general").
+ * Channel names in URL paths are bare names without the '#' prefix (e.g. "general",
+ * not "#general"). The response convId is the bare name (e.g. "general"), while convName
+ * includes the '#' prefix (e.g. "#general").
  *
  * Test coverage:
  *  - POST /api/v1/efforts/{effortId}/conversations/create-channel — happy path + validation
  *  - GET  /api/v1/efforts/{effortId}/conversations               — empty + populated list
- *  - GET  /api/v1/efforts/{effortId}/conversations/{convId}/messages — found + not found
- *  - POST /api/v1/efforts/{effortId}/conversations/{convId}/members  — happy path + errors
+ *  - GET  /api/v1/efforts/{effortId}/conversations/{channelName}/messages — found + not found
+ *  - POST /api/v1/efforts/{effortId}/conversations/{channelName}/members  — happy path + errors
  */
 class ConversationRoutesTest : DescribeSpec({
 
     // ---- shared fixtures ----
 
-    val effortId = EffortId("effort:test-effort-001")
-    // Decoded form used for mock matching and response assertions
-    val channelConvId        = "conv:#general"
-    // URL-encoded form used in URL path segments ('#' → '%23')
-    val channelConvIdEncoded = "conv:%23general"
+    val effortId = EffortId("test-effort-001")
+    // convId is the bare channel name (without '#' prefix)
+    val channelName      = "general"
     val now = Clock.System.now()
 
     val sampleConversationRow = ConversationRow(
         effortId  = effortId,
-        convId    = channelConvId,
+        convId    = channelName,
         convName  = "#general",
         members   = listOf("@alice", "@lead-dev"),
         createdAt = now,
@@ -70,7 +67,7 @@ class ConversationRoutesTest : DescribeSpec({
 
     val sampleMessageRow = MessageRow(
         messageId = "msg:abc123",
-        convId    = channelConvId,
+        convId    = channelName,
         effortId  = effortId,
         fromName  = "@alice",
         body      = "Hello, world!",
@@ -134,7 +131,8 @@ class ConversationRoutesTest : DescribeSpec({
 
                 response.status shouldBe HttpStatusCode.Created
                 val body = response.bodyAsText()
-                body shouldContain "\"convId\":\"conv:#general\""
+                // convId is bare name (no '#' prefix), convName has '#' prefix
+                body shouldContain "\"convId\":\"general\""
                 body shouldContain "\"convName\":\"#general\""
                 body shouldContain "\"@alice\""
                 body shouldContain "\"@lead-dev\""
@@ -183,20 +181,6 @@ class ConversationRoutesTest : DescribeSpec({
                 response.bodyAsText() shouldContain "member"
             }
         }
-
-        it("returns 400 when effortId path parameter is invalid") {
-            testApplication {
-                application { configureServer(listOf(testModule())) }
-                val client = authenticatedClient()
-                val response = client.post("/api/v1/efforts/not-an-effort-id/conversations/create-channel") {
-                    contentType(ContentType.Application.Json)
-                    setBody(validCreateBody)
-                }
-
-                // EffortId constructor rejects values without "effort:" prefix
-                response.status shouldBe HttpStatusCode.BadRequest
-            }
-        }
     }
 
     // ---- GET /api/v1/efforts/{effortId}/conversations ----
@@ -226,34 +210,31 @@ class ConversationRoutesTest : DescribeSpec({
 
                 response.status shouldBe HttpStatusCode.OK
                 val body = response.bodyAsText()
-                body shouldContain "\"convId\":\"conv:#general\""
+                body shouldContain "\"convId\":\"general\""
                 body shouldContain "\"convName\":\"#general\""
                 body shouldContain "\"@alice\""
             }
         }
     }
 
-    // ---- GET /api/v1/efforts/{effortId}/conversations/{convId}/messages ----
+    // ---- GET /api/v1/efforts/{effortId}/conversations/{channelName}/messages ----
 
-    describe("GET /api/v1/efforts/{effortId}/conversations/{convId}/messages") {
-
-        // '#' must be percent-encoded as '%23' in URL path segments.
-        // Ktor decodes '%23' → '#' when populating call.parameters["convId"].
+    describe("GET /api/v1/efforts/{effortId}/conversations/{channelName}/messages") {
 
         it("returns 200 with messages when conversation exists") {
-            coEvery { readRepo.get(effortId, channelConvId) } returns sampleConversationRow
-            coEvery { readRepo.getMessages(effortId, channelConvId, 0, 50) } returns listOf(sampleMessageRow)
+            coEvery { readRepo.get(effortId, channelName) } returns sampleConversationRow
+            coEvery { readRepo.getMessages(effortId, channelName, 0, 50) } returns listOf(sampleMessageRow)
 
             testApplication {
                 application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get(
-                    "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/messages"
+                    "/api/v1/efforts/${effortId.value}/conversations/$channelName/messages"
                 )
 
                 response.status shouldBe HttpStatusCode.OK
                 val body = response.bodyAsText()
-                body shouldContain "\"convId\":\"conv:#general\""
+                body shouldContain "\"convId\":\"general\""
                 body shouldContain "\"messageId\":\"msg:abc123\""
                 body shouldContain "\"from\":\"@alice\""
                 body shouldContain "\"body\":\"Hello, world!\""
@@ -263,14 +244,14 @@ class ConversationRoutesTest : DescribeSpec({
         }
 
         it("returns 200 with empty messages list when conversation exists but has no messages") {
-            coEvery { readRepo.get(effortId, channelConvId) } returns sampleConversationRow
-            coEvery { readRepo.getMessages(effortId, channelConvId, 0, 50) } returns emptyList()
+            coEvery { readRepo.get(effortId, channelName) } returns sampleConversationRow
+            coEvery { readRepo.getMessages(effortId, channelName, 0, 50) } returns emptyList()
 
             testApplication {
                 application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get(
-                    "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/messages"
+                    "/api/v1/efforts/${effortId.value}/conversations/$channelName/messages"
                 )
 
                 response.status shouldBe HttpStatusCode.OK
@@ -279,13 +260,13 @@ class ConversationRoutesTest : DescribeSpec({
         }
 
         it("returns 404 when the conversation does not exist") {
-            coEvery { readRepo.get(effortId, channelConvId) } returns null
+            coEvery { readRepo.get(effortId, channelName) } returns null
 
             testApplication {
                 application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get(
-                    "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/messages"
+                    "/api/v1/efforts/${effortId.value}/conversations/$channelName/messages"
                 )
 
                 response.status shouldBe HttpStatusCode.NotFound
@@ -293,14 +274,14 @@ class ConversationRoutesTest : DescribeSpec({
         }
 
         it("respects from and limit query parameters") {
-            coEvery { readRepo.get(effortId, channelConvId) } returns sampleConversationRow
-            coEvery { readRepo.getMessages(effortId, channelConvId, 10, 20) } returns emptyList()
+            coEvery { readRepo.get(effortId, channelName) } returns sampleConversationRow
+            coEvery { readRepo.getMessages(effortId, channelName, 10, 20) } returns emptyList()
 
             testApplication {
                 application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.get(
-                    "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/messages?from=10&limit=20"
+                    "/api/v1/efforts/${effortId.value}/conversations/$channelName/messages?from=10&limit=20"
                 )
 
                 response.status shouldBe HttpStatusCode.OK
@@ -311,20 +292,18 @@ class ConversationRoutesTest : DescribeSpec({
         }
     }
 
-    // ---- POST /api/v1/efforts/{effortId}/conversations/{convId}/members ----
+    // ---- POST /api/v1/efforts/{effortId}/conversations/{channelName}/members ----
 
-    describe("POST /api/v1/efforts/{effortId}/conversations/{convId}/members") {
-
-        // '#' must be percent-encoded as '%23' in URL path segments.
+    describe("POST /api/v1/efforts/{effortId}/conversations/{channelName}/members") {
 
         it("returns 200 with convId and member on success") {
-            coJustRun { commandHandler.handle(any<com.bigboote.domain.commands.ConversationCommand.AddMember>()) }
+            coJustRun { commandHandler.handle(any<com.bigboote.domain.commands.ConversationCommand.AddMembers>()) }
 
             testApplication {
                 application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post(
-                    "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/members"
+                    "/api/v1/efforts/${effortId.value}/conversations/$channelName/members"
                 ) {
                     contentType(ContentType.Application.Json)
                     setBody("""{ "member": "@bob" }""")
@@ -332,7 +311,7 @@ class ConversationRoutesTest : DescribeSpec({
 
                 response.status shouldBe HttpStatusCode.OK
                 val body = response.bodyAsText()
-                body shouldContain "\"convId\":\"conv:#general\""
+                body shouldContain "\"convId\":\"general\""
                 body shouldContain "\"member\":\"@bob\""
             }
         }
@@ -342,7 +321,7 @@ class ConversationRoutesTest : DescribeSpec({
                 application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post(
-                    "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/members"
+                    "/api/v1/efforts/${effortId.value}/conversations/$channelName/members"
                 ) {
                     contentType(ContentType.Application.Json)
                     setBody("""{ "member": "  " }""")
@@ -358,7 +337,7 @@ class ConversationRoutesTest : DescribeSpec({
                 application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post(
-                    "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/members"
+                    "/api/v1/efforts/${effortId.value}/conversations/$channelName/members"
                 ) {
                     contentType(ContentType.Application.Json)
                     setBody("""{ "member": "bob" }""")
@@ -371,14 +350,14 @@ class ConversationRoutesTest : DescribeSpec({
 
         it("returns 404 when the conversation does not exist") {
             coEvery {
-                commandHandler.handle(any<com.bigboote.domain.commands.ConversationCommand.AddMember>())
-            } throws DomainException(DomainError.ConversationNotFound(channelConvId))
+                commandHandler.handle(any<com.bigboote.domain.commands.ConversationCommand.AddMembers>())
+            } throws DomainException(DomainError.ConversationNotFound(channelName))
 
             testApplication {
                 application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
                 val response = client.post(
-                    "/api/v1/efforts/${effortId.value}/conversations/$channelConvIdEncoded/members"
+                    "/api/v1/efforts/${effortId.value}/conversations/$channelName/members"
                 ) {
                     contentType(ContentType.Application.Json)
                     setBody("""{ "member": "@bob" }""")

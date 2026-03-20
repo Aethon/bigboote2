@@ -42,7 +42,7 @@ class SpawnReactorTest : DescribeSpec({
 
     val agentId     = AgentId("agent:test-agent-001")
     val effortId    = EffortId("effort:test-effort-001")
-    val agentTypeId = AgentTypeId.of("test-agent-type")
+    val agentTypeId = AgentTypeId("test-agent-type")
     val collab      = CollaboratorName.Individual("test-agent")
     val gatewayUrl  = "http://coordinator-test/internal/v1"
 

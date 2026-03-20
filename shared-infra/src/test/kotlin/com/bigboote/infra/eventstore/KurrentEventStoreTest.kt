@@ -3,6 +3,7 @@ package com.bigboote.infra.eventstore
 import com.bigboote.domain.events.EffortEvent
 import com.bigboote.domain.events.EffortEvent.EffortCreated
 import com.bigboote.domain.events.EffortEvent.EffortStarted
+import com.bigboote.domain.events.EventContext
 import com.bigboote.domain.values.*
 import com.bigboote.events.eventstore.ExpectedVersion
 import com.eventstore.dbclient.EventStoreDBClient

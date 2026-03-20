@@ -85,7 +85,7 @@ val DomainModule = module {
     // Clock.System passed per Architecture doc Section 13.1 for testability.
     single<EffortCommandHandler> { EffortCommandHandlerImpl(get(), Clock.System) }
     single<AgentTypeCommandHandler> { AgentTypeCommandHandlerImpl(get(), Clock.System) }
-    single<ConversationCommandHandler> { ConversationCommandHandlerImpl(get(), Clock.System) }  // Phase 11
+    single<ConversationCommandHandler> { ConversationCommandHandlerImpl(get()) }  // Phase 11
     single { DocumentCommandHandler(get(), Clock.System, get()) }  // Phase 14
     single { SystemCollaborator(get()) }                           // Phase 15
 }
@@ -117,9 +117,8 @@ val ReactorModule = module {
     // Phase 13: MessageDeliveryReactor
     single {
         MessageDeliveryReactor(
-            eventStore                  = get(),
-            proxyRegistry               = get(),
-            conversationReadRepository  = get(),
+            eventStore    = get(),
+            proxyRegistry = get(),
         )
     }
     // Phase 15: SystemMessageReactor, EffortLifecycleReactor

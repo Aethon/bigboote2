@@ -39,7 +39,7 @@ private val logger = LoggerFactory.getLogger("com.bigboote.coordinator.api.publi
  * See API Design doc Section 3.5 and Architecture doc Section 7.3.
  */
 fun Route.sseRoutes() {
-    val broadcaster by inject<SseEventBroadcaster>()
+    val broadcaster by application.inject<SseEventBroadcaster>()
 
     sse("/efforts/{effortId}/stream") {
         val effortId = parseSseEffortId(call.parameters["effortId"])

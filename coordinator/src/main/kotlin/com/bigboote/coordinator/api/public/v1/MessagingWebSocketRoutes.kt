@@ -9,7 +9,6 @@ import com.bigboote.coordinator.proxy.ProxyRegistry
 import com.bigboote.domain.commands.ConversationCommand.PostMessage
 import com.bigboote.domain.values.CollaboratorName
 import com.bigboote.domain.values.EffortId
-import com.bigboote.domain.values.MessageId
 import io.ktor.server.auth.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
@@ -39,13 +38,14 @@ private val logger = LoggerFactory.getLogger("com.bigboote.coordinator.api.publi
  *
  * **Client-to-server frame format** (JSON text):
  * ```json
- * { "convId": "conv:#review", "body": "Here is my response." }
+ * { "convId": "#review", "body": "Here is my response." }
  * ```
+ * The `convId` field may include or omit the `#` prefix — both are accepted.
  *
  * **Server-to-client frame format** (JSON text, delivered by MessageDeliveryReactor):
  * ```json
- * { "type": "message", "convId": "conv:#review", "from": "@alice",
- *   "body": "...", "messageId": "msg:56", "postedAt": "2026-03-16T10:21:00Z" }
+ * { "type": "message", "convId": "#review", "from": "@alice",
+ *   "body": "...", "messageId": "V1StGXR8_Z", "postedAt": "2026-03-16T10:21:00Z" }
  * ```
  *
  * Requires `Authorization: Bearer <token>` via the `"public-api"` auth scheme.
@@ -53,18 +53,15 @@ private val logger = LoggerFactory.getLogger("com.bigboote.coordinator.api.publi
  * See Architecture doc Section 9.1 and API Design doc Section 3.6.
  */
 fun Route.messagingWebSocketRoutes() {
-    val messagingAdapter  by inject<NativeMessagingAdapter>()
-    val proxyRegistry     by inject<ProxyRegistry>()
-    val commandHandler    by inject<ConversationCommandHandler>()
+    val messagingAdapter  by application.inject<NativeMessagingAdapter>()
+    val proxyRegistry     by application.inject<ProxyRegistry>()
+    val commandHandler    by application.inject<ConversationCommandHandler>()
 
     val json = Json { ignoreUnknownKeys = true }
 
     webSocket("/efforts/{effortId}/messaging") {
         val effortId = parseWsEffortId(call.parameters["effortId"])
 
-        // Derive collaborator identity from the JWT principal set by the "public-api"
-        // auth scheme. In Phase 7 this is the stub dev principal; in production it
-        // will come from the validated JWT sub/collaboratorName claims.
         val principal = call.principal<UserPrincipal>()
         if (principal == null) {
             logger.warn("MessagingWebSocket: no UserPrincipal found — closing with 1008")
@@ -83,61 +80,64 @@ fun Route.messagingWebSocketRoutes() {
             return@webSocket
         }
 
-        val proxy = messagingAdapter.createProxy(effortId, collaboratorName, this)
-        proxyRegistry.register(effortId, collaboratorName, proxy)
-        logger.info("MessagingWebSocket: connected — {} in effort {}", collaboratorName, effortId)
+        // WebSocket messaging requires the user to be an individual collaborator
+        val individualName = collaboratorName as? CollaboratorName.Individual ?: run {
+            logger.warn(
+                "MessagingWebSocket: collaboratorName '{}' is not an Individual — closing",
+                collaboratorName,
+            )
+            close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Collaborator must be an individual (@name)"))
+            return@webSocket
+        }
+
+        val proxy = messagingAdapter.createProxy(effortId, individualName, this)
+        proxyRegistry.register(effortId, individualName, proxy)
+        logger.info("MessagingWebSocket: connected — {} in effort {}", individualName, effortId)
 
         try {
-            // The for loop terminates naturally when the client disconnects or the
-            // channel is closed (normal or abnormal close). Any remaining exceptions
-            // bubble up to the outer try/finally for cleanup.
             for (frame in incoming) {
                 if (frame !is Frame.Text) continue
 
                 val text = frame.readText()
                 try {
                     val req: WsPostRequest = json.decodeFromString(text)
-                    val convId = req.convId.ifBlank {
-                        logger.warn(
-                            "MessagingWebSocket: blank convId from {} — skipping frame",
-                            collaboratorName,
-                        )
-                        continue
-                    }
-                    if (req.body.isBlank()) {
-                        logger.warn(
-                            "MessagingWebSocket: blank body from {} — skipping frame",
-                            collaboratorName,
-                        )
+
+                    val rawConvId = req.convId.ifBlank {
+                        logger.warn("MessagingWebSocket: blank convId from {} — skipping frame", individualName)
                         continue
                     }
 
+                    if (req.body.isBlank()) {
+                        logger.warn("MessagingWebSocket: blank body from {} — skipping frame", individualName)
+                        continue
+                    }
+
+                    // Accept "#review" or "review" — strip leading '#' if present
+                    val channelSimple = rawConvId.removePrefix("#")
+                    val channelName = CollaboratorName.Channel(channelSimple)
+
                     val cmd = PostMessage(
-                        messageId = MessageId.generate(),
-                        convId    = convId,
-                        effortId  = effortId,
-                        from      = collaboratorName,
-                        body      = req.body.trim(),
+                        effortId    = effortId,
+                        channelName = channelName,
+                        from        = individualName,
+                        body        = req.body.trim(),
                     )
                     commandHandler.handle(cmd)
 
                     logger.debug(
-                        "MessagingWebSocket: posted message from {} in conv {} effort {}",
-                        collaboratorName, convId, effortId,
+                        "MessagingWebSocket: posted message from {} in #{} effort {}",
+                        individualName, channelSimple, effortId,
                     )
                 } catch (e: Exception) {
                     logger.warn(
                         "MessagingWebSocket: failed to process frame from {}: {}",
-                        collaboratorName, e.message,
+                        individualName, e.message,
                     )
                 }
             }
         } finally {
-            proxyRegistry.unregister(effortId, collaboratorName)
-            logger.info(
-                "MessagingWebSocket: disconnected — {} in effort {}",
-                collaboratorName, effortId,
-            )
+            proxyRegistry.unregister(effortId, individualName)
+            logger.info("MessagingWebSocket: disconnected — {} in effort {}", individualName, effortId)
         }
     }
 }

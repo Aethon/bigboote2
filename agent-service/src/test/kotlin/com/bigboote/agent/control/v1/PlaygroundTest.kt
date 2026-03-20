@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test
 
 class PlaygroundTest {
 
-    @Test
+    //@Test()
     fun `loop it`() {
 
         val credentialsFile = Path(System.getProperty("user.home"), ".bigbootek", "credentials.json")

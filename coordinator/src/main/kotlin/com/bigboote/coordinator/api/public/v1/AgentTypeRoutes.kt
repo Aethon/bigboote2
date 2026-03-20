@@ -40,9 +40,9 @@ private val logger = LoggerFactory.getLogger("com.bigboote.coordinator.api.publi
  * See API Design doc Section 3.2.
  */
 fun Route.agentTypeRoutes() {
-    val commandHandler by inject<AgentTypeCommandHandler>()
-    val projection by inject<AgentTypeSummaryProjection>()
-    val readRepo by inject<AgentTypeReadRepository>()
+    val commandHandler by application.inject<AgentTypeCommandHandler>()
+    val projection by application.inject<AgentTypeSummaryProjection>()
+    val readRepo by application.inject<AgentTypeReadRepository>()
 
     route("/agent-types") {
 
