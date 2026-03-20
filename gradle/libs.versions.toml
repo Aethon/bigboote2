@@ -18,6 +18,9 @@ jnanoid             = "2.0.0"
 aws-sdk-java        = "2.29.46"
 node-gradle         = "7.0.2"
 
+xemanticAiToolSchema = "1.2.0"
+xemanticAiMoney = "0.2"
+
 [libraries]
 kotlinGradle            = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 
@@ -36,6 +39,7 @@ ktor-server-test-host    = { module = "io.ktor:ktor-server-test-host",         v
 ktor-client-core         = { module = "io.ktor:ktor-client-core",              version.ref = "ktor" }
 ktor-client-cio          = { module = "io.ktor:ktor-client-cio",               version.ref = "ktor" }
 ktor-client-content-neg  = { module = "io.ktor:ktor-client-content-negotiation",version.ref = "ktor" }
+ktor-client-logging      = { module = "io.ktor:ktor-client-logging",           version.ref = "ktor" }
 ktor-client-mock         = { module = "io.ktor:ktor-client-mock",              version.ref = "ktor" }
 
 # Serialization
@@ -89,6 +93,9 @@ testcontainers-core      = { module = "org.testcontainers:testcontainers",      
 testcontainers-postgresql= { module = "org.testcontainers:postgresql",          version.ref = "testcontainers" }
 testcontainers-localstack= { module = "org.testcontainers:localstack",          version.ref = "testcontainers" }
 testcontainers-junit     = { module = "org.testcontainers:junit-jupiter",       version.ref = "testcontainers" }
+
+xemanticAiToolSchema = { module = "com.xemantic.ai:xemantic-ai-tool-schema", version.ref = "xemanticAiToolSchema" }
+xemanticAiMoney = { module = "com.xemantic.ai:xemantic-ai-money", version.ref = "xemanticAiMoney" }
 
 [plugins]
 kotlin-jvm               = { id = "org.jetbrains.kotlin.jvm",                   version.ref = "kotlin" }

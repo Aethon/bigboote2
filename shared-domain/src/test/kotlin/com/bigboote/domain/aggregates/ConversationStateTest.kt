@@ -1,58 +1,59 @@
 package com.bigboote.domain.aggregates
 
-import com.bigboote.domain.events.ConversationEvent
-import com.bigboote.domain.events.ConversationEvent.*
+import com.bigboote.domain.events.EventContext
+import com.bigboote.domain.events.EventLogEntry
+import com.bigboote.domain.events.GroupChannelEvent.*
 import com.bigboote.domain.values.*
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
-import kotlinx.datetime.Clock
 
-class ConversationStateTest : StringSpec({
+class GroupChannelStateTest : StringSpec({
 
-    val now = Clock.System.now()
+    val streamName = StreamName.GroupChannel(EffortId("effort:abc"), CollaboratorName.Channel("def"))
 
-    val streamName = StreamName.Conversation(EffortId("abc"), ConvId.Channel("def"))
-
-    val createdEventEntry = EventLogEntryImpl(
+    val createdEventEntry = EventLogEntry(
         streamName = streamName,
-        event = ConversationCreated(
-            convName = CollaboratorName.Channel("review"),
+        event = ChannelCreated(
             members = listOf(
                 CollaboratorName.Individual("lead-dev"),
                 CollaboratorName.Individual("alice"),
-            ),
-            createdAt = now,
+            )
         ),
         context = EventContext(0, 0)
     )
 
-    val memberAddedEventEntry = EventLogEntryImpl(
+    val memberAddedEventEntry = EventLogEntry(
         streamName = streamName,
-        event = MemberAdded(CollaboratorName.Individual("new-reviewer"), now),
+        event = MembersAdded(setOf(CollaboratorName.Individual("new-reviewer"))),
         context = EventContext(1, 14)
     )
 
-    val messagePostedEventEntry = EventLogEntryImpl(
+    val messagePostedEventEntry = EventLogEntry(
         streamName = streamName,
-        event = MemberAdded(CollaboratorName.Individual("new-reviewer"), now),
+        event = ChannelMessagePosted(
+            messageId = MessageId("msg:123"),
+            from = CollaboratorName.Individual("alice"),
+            to = setOf(CollaboratorName.Individual("lead-dev")),
+            body = "Hello, world!"
+        ),
         context = EventContext(1, 24)
     )
 
     "apply ConversationCreated initializes state" {
-        val state = ConversationState.start(createdEventEntry)
+        val state = GroupChannelState.start(createdEventEntry)
         state.members.size shouldBe 2
     }
 
     "apply MemberAdded appends member" {
-        val state = ConversationState.start(createdEventEntry)
+        val state = GroupChannelState.start(createdEventEntry)
             .apply(memberAddedEventEntry)
         state.members.size shouldBe 3
         state.members shouldContain CollaboratorName.Individual("new-reviewer")
     }
 
     "apply MessagePosted does not change state" {
-        val before = ConversationState.start(createdEventEntry)
+        val before = GroupChannelState.start(createdEventEntry)
         val after = before.apply(messagePostedEventEntry)
         after shouldBe before
     }

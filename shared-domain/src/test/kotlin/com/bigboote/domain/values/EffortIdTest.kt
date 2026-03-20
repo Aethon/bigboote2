@@ -8,26 +8,15 @@ import kotlinx.serialization.json.Json
 
 class EffortIdTest : StringSpec({
 
-    "generate creates id with correct prefix" {
-        val id = EffortId.generate()
-        id.value shouldStartWith "effort:"
-    }
-
-    "rejects id without correct prefix" {
-        shouldThrow<IllegalArgumentException> {
-            EffortId("invalid:abc")
-        }
-    }
-
     "serializes to plain string" {
-        val id = EffortId("effort:test123")
+        val id = EffortId("test123")
         val json = Json.encodeToString(id)
-        json shouldBe "\"effort:test123\""
+        json shouldBe "\"test123\""
     }
 
     "deserializes from plain string" {
-        val id = Json.decodeFromString<EffortId>("\"effort:test123\"")
-        id.value shouldBe "effort:test123"
+        val id = Json.decodeFromString<EffortId>("\"test123\"")
+        id.value shouldBe "test123"
     }
 
     "round-trip serialization" {
@@ -38,6 +27,6 @@ class EffortIdTest : StringSpec({
     }
 
     "toString returns value" {
-        EffortId("effort:abc").toString() shouldBe "effort:abc"
+        EffortId("abc").toString() shouldBe "abc"
     }
 })

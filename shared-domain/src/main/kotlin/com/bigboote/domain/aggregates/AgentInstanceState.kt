@@ -43,7 +43,7 @@ data class AgentInstanceState(
 
     companion object {
         val EMPTY = AgentInstanceState(
-            agentTypeId = AgentTypeId.of("empty"),
+            agentTypeId = AgentTypeId("empty"),
             collaboratorName = CollaboratorName.Individual("__empty__"),
             status = AgentStatus.STARTED,
             loopStatus = LoopStatus.IDLE,

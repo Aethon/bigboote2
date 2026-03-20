@@ -7,67 +7,56 @@ import kotlinx.serialization.json.Json
 
 class AgentTypeIdTest : StringSpec({
 
-    "of() creates valid id from slug" {
-        val id = AgentTypeId.of("lead-eng")
-        id.value shouldBe "agenttype:lead-eng"
-    }
-
     "accepts simple slug" {
-        AgentTypeId("agenttype:reviewer").value shouldBe "agenttype:reviewer"
+        AgentTypeId("reviewer").value shouldBe "reviewer"
     }
 
     "accepts slug with numbers" {
-        AgentTypeId("agenttype:agent3").value shouldBe "agenttype:agent3"
+        AgentTypeId("agent3").value shouldBe "agent3"
     }
 
     "accepts multi-segment slug" {
-        AgentTypeId("agenttype:code-review-bot").value shouldBe "agenttype:code-review-bot"
+        AgentTypeId("code-review-bot").value shouldBe "code-review-bot"
     }
 
     "rejects slug with uppercase" {
         shouldThrow<IllegalArgumentException> {
-            AgentTypeId("agenttype:LeadEng")
+            AgentTypeId("LeadEng")
         }
     }
 
     "rejects slug with underscores" {
         shouldThrow<IllegalArgumentException> {
-            AgentTypeId("agenttype:lead_eng")
+            AgentTypeId("lead_eng")
         }
     }
 
     "rejects slug with leading hyphen" {
         shouldThrow<IllegalArgumentException> {
-            AgentTypeId("agenttype:-leading")
+            AgentTypeId("-leading")
         }
     }
 
     "rejects slug with trailing hyphen" {
         shouldThrow<IllegalArgumentException> {
-            AgentTypeId("agenttype:trailing-")
+            AgentTypeId("trailing-")
         }
     }
 
     "rejects slug with double hyphen" {
         shouldThrow<IllegalArgumentException> {
-            AgentTypeId("agenttype:double--hyphen")
-        }
-    }
-
-    "rejects wrong prefix" {
-        shouldThrow<IllegalArgumentException> {
-            AgentTypeId("agent:lead-eng")
+            AgentTypeId("double--hyphen")
         }
     }
 
     "serializes to plain string" {
-        val id = AgentTypeId.of("lead-eng")
+        val id = AgentTypeId("lead-eng")
         val json = Json.encodeToString(id)
-        json shouldBe "\"agenttype:lead-eng\""
+        json shouldBe "\"lead-eng\""
     }
 
     "round-trip serialization" {
-        val original = AgentTypeId.of("code-reviewer")
+        val original = AgentTypeId("code-reviewer")
         val json = Json.encodeToString(original)
         val deserialized = Json.decodeFromString<AgentTypeId>(json)
         deserialized shouldBe original

@@ -12,15 +12,20 @@ import kotlinx.serialization.encoding.Encoder
 @Serializable(with = AgentId.Serializer::class)
 value class AgentId(val value: String) {
     init {
-        require(value.startsWith(PREFIX)) { "AgentId must start with '$PREFIX'" }
+        require(value.length <= MAX_SLUG_LENGTH) {
+            "AgentId value must be at most $MAX_SLUG_LENGTH characters, got: ${value.length}"
+        }
+        // TODO: validate character set
     }
 
     override fun toString(): String = value
 
     companion object {
-        private const val PREFIX = "agent:"
 
-        fun generate(): AgentId = AgentId("$PREFIX${NanoIdUtils.randomNanoId()}")
+        private const val MAX_SLUG_LENGTH = 64
+
+        fun generate(): AgentId = AgentId(NanoIdUtils.randomNanoId())
+
     }
 
     internal object Serializer : KSerializer<AgentId> {
@@ -29,3 +34,4 @@ value class AgentId(val value: String) {
         override fun deserialize(decoder: Decoder) = AgentId(decoder.decodeString())
     }
 }
+

@@ -15,7 +15,7 @@ import kotlinx.serialization.Serializable
  * See Architecture doc Change Document v1.0 Section 5.7.
  */
 @Serializable
-sealed interface AgentTypeEvent {
+sealed interface AgentTypeEvent : Event {
 
     @Serializable
     @SerialName("AgentTypeCreated")
