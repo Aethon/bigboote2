@@ -20,6 +20,7 @@ dependencies {
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.content.neg)
+    implementation(libs.ktor.client.logging)
     implementation(libs.koin.ktor)
     implementation(libs.koin.core)
     implementation(libs.kotlinx.coroutines.core)

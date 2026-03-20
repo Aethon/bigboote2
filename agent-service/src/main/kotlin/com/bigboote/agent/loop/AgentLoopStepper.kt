@@ -23,15 +23,12 @@ import com.bigboote.domain.events.LoopEvent
 import com.bigboote.domain.values.CollaboratorName
 import com.bigboote.domain.values.MessageId
 import org.jetbrains.annotations.VisibleForTesting
-import kotlin.time.Clock
 
 
 class AgentLoopStepper(
-    private val agent: CollaboratorName.Individual,
     private val gateway: AgentGateway,
     private val assistant: ClaudeApiClient,
-    private val config: AgentLoopConfig,
-    private val clock: Clock = Clock.System
+    private val config: AgentLoopConfig
 ) {
     private val loopKickChannel = Channel<Unit>(0)
 
@@ -41,14 +38,6 @@ class AgentLoopStepper(
     )
 
     val idle: SharedFlow<Unit> = _events.asSharedFlow()
-
-//    suspend fun addCollaboratorMessage(
-//        from: CollaboratorName.Individual,
-//        to: CollaboratorName,
-//        content: List<com.xemantic.ai.anthropic.content.Content>
-//    ) {
-//        collaborationStream.emit(MessageAdded(UUID.randomUUID(), from, to, content))
-//    }
 
     suspend fun kickLoop() {
         loopKickChannel.send(Unit)
@@ -71,18 +60,6 @@ class AgentLoopStepper(
                     if (entries.isEmpty()) break
                     for (entry in entries) {
                         loopState = loopState.apply(entry)
-
-//                        val loopEntry = entry.maybeCast(LoopEvent::class)
-//                        if (loopEntry != null) {
-//                            loopState = loopState.apply(loopEntry)
-//                            convState = convState.apply(loopEntry)
-//                            // tODO: also agent conversation state
-//                        } else {
-//                            val conversationEntry = entry.maybeCast(ConversationEvent::class)
-//                            if (conversationEntry != null) {
-//                                convState.apply(conversationEntry)
-//                            }
-//                        }
                         // TODO: position should be managed by a builder
                         position = entry.context.storePosition
                     }
@@ -124,7 +101,7 @@ class AgentLoopStepper(
             LoopStatus.STUCK -> return LoopStatus.STUCK
             LoopStatus.IDLE, LoopStatus.PENDING -> {
 
-                gateway.writeLoopEvents(listOf(LoopEvent.StepStarted()))
+                gateway.writeLoopEvents(listOf(LoopEvent.StepStarted))
 
                 val result: LoopStatus = try {
                     when (loopState.assistantStatus) {
