@@ -31,7 +31,7 @@ interface EventStore {
      * @param expectedVersion Concurrency control: Any, NoStream, or Exact(version)
      * @return AppendResult containing the next expected version
      */
-    suspend fun <E : Any> appendToStream(
+    suspend fun <E : Event> appendToStream(
         streamName: StreamName<E>,
         events: List<E>,
         expectedVersion: ExpectedVersion = ExpectedVersion.Any,
@@ -61,7 +61,7 @@ interface EventStore {
      * @param handler Callback invoked for each typed event envelope
      * @return EventSubscription handle to stop the subscription
      */
-    fun <E : Any> subscribeToStream(
+    fun <E : Event> subscribeToStream(
         streamName: StreamName<E>,
         fromVersion: Long,
         handler: suspend (EventEnvelope<E>) -> Unit,
@@ -76,7 +76,7 @@ interface EventStore {
      * @param handler Callback invoked for each typed event envelope
      * @return EventSubscription handle to stop the subscription
      */
-    fun <E : Any> subscribePersistent(
+    fun <E : Event> subscribePersistent(
         streamName: StreamName<E>,
         groupName: String,
         handler: suspend (EventEnvelope<E>) -> Unit,

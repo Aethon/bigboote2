@@ -39,7 +39,7 @@ sealed interface LoopEvent :
      */
     @Serializable
     @SerialName("StepStarted")
-    object StepStarted
+    data object StepStarted
         : LoopEvent
 
     /**

@@ -1,6 +1,6 @@
 package com.bigboote.events.serialization
 
-import com.bigboote.domain.events.TestEvents
+import com.bigboote.domain.testing.Events
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotBeEmpty
@@ -24,9 +24,9 @@ class EventSerializationRoundTripTest : StringSpec({
         decoded shouldBe event
     }
 
-    TestEvents.Examples.forEach { event ->
-        "${event::class.simpleName} round-trip through EventRegistry" {
-            roundTrip(event)
+    Events.cases.forEach { case ->
+        "${case.caseName()} round-trip via EventRegistry succeeds" {
+            roundTrip(case.subject)
         }
     }
 })

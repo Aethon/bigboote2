@@ -1,5 +1,6 @@
 plugins {
     id("buildsrc.convention.kotlin-jvm")
+    `java-test-fixtures`
 }
 
 dependencies {
@@ -13,4 +14,7 @@ dependencies {
     implementation(libs.xemanticAiMoney)
     testImplementation(libs.kotest.runner)
     testImplementation(libs.kotest.assertions)
+
+    testFixturesImplementation(libs.kotlinx.serialization)
+    testFixturesImplementation(libs.kotlinx.datetime)
 }

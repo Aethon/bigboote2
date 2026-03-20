@@ -13,7 +13,7 @@ import kotlinx.datetime.Clock
 class AgentTypeStateTest : StringSpec({
 
     val now = Clock.System.now()
-    val agentTypeId = AgentTypeId.of("lead-eng")
+    val agentTypeId = AgentTypeId("lead-eng")
     val streamName = StreamName.AgentType(agentTypeId)
 
     val createdEvent = EventLogEntry<AgentTypeEvent>(

@@ -12,7 +12,7 @@ class AgentInstanceStateTest : StringSpec({
     val now = Clock.System.now()
 
     val startedEvent = AgentStarted(
-        agentTypeId = AgentTypeId.of("lead-eng"),
+        agentTypeId = AgentTypeId("lead-eng"),
         collaboratorName = CollaboratorName.Individual("lead-dev"),
         supportedGatewayApiVersions = listOf("v1"),
         supportedControlApiVersions = listOf("v1"),
