@@ -18,6 +18,9 @@ jnanoid             = "2.0.0"
 aws-sdk-java        = "2.29.46"
 node-gradle         = "7.0.2"
 
+xemanticAiToolSchema = "1.2.0"
+xemanticAiMoney = "0.2"
+
 [libraries]
 kotlinGradle            = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 
@@ -88,6 +91,9 @@ mockk                    = { module = "io.mockk:mockk",                         
 testcontainers-core      = { module = "org.testcontainers:testcontainers",      version.ref = "testcontainers" }
 testcontainers-postgresql= { module = "org.testcontainers:postgresql",          version.ref = "testcontainers" }
 testcontainers-junit     = { module = "org.testcontainers:junit-jupiter",       version.ref = "testcontainers" }
+
+xemanticAiToolSchema = { module = "com.xemantic.ai:xemantic-ai-tool-schema", version.ref = "xemanticAiToolSchema" }
+xemanticAiMoney = { module = "com.xemantic.ai:xemantic-ai-money", version.ref = "xemanticAiMoney" }
 
 [plugins]
 kotlin-jvm               = { id = "org.jetbrains.kotlin.jvm",                   version.ref = "kotlin" }

@@ -60,12 +60,20 @@ sealed class StreamName<out E : Any> {
         override val path = "/effort:${effortId.value}/agent:${agentId.value}/loop"
     }
 
-    // ── Conversation stream: /effort:{id}/{convId.streamSafeName} ─────────
-    data class Conversation(
+    // ── Conversation stream: /effort:{id}/channel:{collaboratorName.simple} ─────────
+    data class GroupChannel(
         val effortId: EffortId,
-        val convId: ConvId,
-    ) : StreamName<com.bigboote.domain.events.ConversationEvent>() {
-        override val path = "/effort:${effortId.value}/${convId.streamSafeName}"
+        val channelName: CollaboratorName.Channel,
+    ) : StreamName<com.bigboote.domain.events.GroupChannelEvent>() {
+        override val path = "/effort:${effortId.value}/channel:${channelName.simple}"
+    }
+
+    // ── Conversation stream: /effort:{id}/dm:{collaboratorName.simple} ─────────
+    data class DirectMessage(
+        val effortId: EffortId,
+        val collaboratorName: CollaboratorName.Individual,
+    ) : StreamName<com.bigboote.domain.events.DirectMessageEvent>() {
+        override val path = "/effort:${effortId.value}/dm:${collaboratorName.simple}"
     }
 
     // ── Document stream: /effort:{id}/docs ────────────────────────────────
@@ -105,12 +113,21 @@ sealed class StreamName<out E : Any> {
                     )
                 }
 
-            // /effort:{id}/conv:...
-            path.matches(Regex("/effort:[^/]+/conv:.+$")) ->
+            // /effort:{id}/channel:{channelName}
+            path.matches(Regex("/effort:[^/]+/channel:.+$")) ->
                 path.split("/", limit = 3).let {
-                    Conversation(
+                    GroupChannel(
                         effortId = EffortId(it[1].removePrefix("effort:")),
-                        convId   = ConvId.parse(it[2]),
+                        channelName = CollaboratorName.Channel(it[2].removePrefix("channel:")),
+                    )
+                }
+
+            // /effort:{id}/dm:{collaboratorName}
+            path.matches(Regex("/effort:[^/]+/dm:.+$")) ->
+                path.split("/", limit = 3).let {
+                    DirectMessage(
+                        effortId = EffortId(it[1].removePrefix("effort:")),
+                        collaboratorName = CollaboratorName.Individual(it[2].removePrefix("dm:")),
                     )
                 }
 

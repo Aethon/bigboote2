@@ -1,5 +1,6 @@
 package org.aethon.agentrunner
 
+import com.bigboote.agent.loop.AgentConversationState
 import com.bigboote.domain.aggregates.AssistantStatus
 import com.xemantic.ai.anthropic.ClaudeApiClient
 import com.xemantic.ai.anthropic.content.Content
@@ -15,42 +16,21 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import org.aethon.agentrunner.collaboration.PendingCollaborationMessage
 import com.bigboote.domain.aggregates.LoopState
 import com.bigboote.domain.aggregates.LoopStatus
-import com.bigboote.domain.events.ConversationEvent
-import com.bigboote.domain.events.Event
-import com.bigboote.domain.events.StreamBasedState
-import com.bigboote.domain.events.EventStream
-import com.bigboote.domain.events.EventStreamReader
+import com.bigboote.domain.aggregates.PendingCollaborationMessage
 import com.bigboote.domain.events.LoopEvent
-import com.bigboote.domain.events.readAfter
 import com.bigboote.domain.values.CollaboratorName
+import com.bigboote.domain.values.MessageId
 import org.jetbrains.annotations.VisibleForTesting
-import java.util.UUID
-import kotlin.String
 import kotlin.time.Clock
 
-suspend inline fun <reified EVENT: Event, STATE: StreamBasedState<EVENT>> STATE.applyEvents(
-    streamReader: EventStreamReader,
-    state: STATE
-): STATE {
-    var currentState = state
-    while (true) {
-        val entries = streamReader.readAfter<EVENT>(currentState.position, 10)
-        if (entries.isEmpty())
-            return currentState
-        for (entry in entries)
-            currentState = applyEvent(entry.event, entry.context) as STATE
-    }
-}
 
 class AgentLoopStepper(
     private val agent: CollaboratorName.Individual,
+    private val gateway: AgentGateway,
     private val assistant: ClaudeApiClient,
     private val config: AgentLoopConfig,
-    private val loopStream: EventStream,
-    private val conversationsStream: EventStream,
     private val clock: Clock = Clock.System
 ) {
     private val loopKickChannel = Channel<Unit>(0)
@@ -77,43 +57,56 @@ class AgentLoopStepper(
     suspend fun run() {
         coroutineScope {
             var loopState = LoopState.START
+            var convState = AgentConversationState.START
+            var lastMessagePosition: Long? = null
+
+            var position: Long? = null
 
             while (true) {
                 ensureActive()
 
                 // Get the loop state up to speed
                 while (true) {
-                    val entries = loopStream.readAfter<LoopEvent>(loopState.position, 10)
-                    if (entries.isEmpty())
-                        break
-                    for (entry in entries)
-                        loopState = loopState.applyEvent(entry.event, entry.context)
+                    val entries = gateway.readLoopEvents(position, 10)
+                    if (entries.isEmpty()) break
+                    for (entry in entries) {
+                        loopState = loopState.apply(entry)
+
+//                        val loopEntry = entry.maybeCast(LoopEvent::class)
+//                        if (loopEntry != null) {
+//                            loopState = loopState.apply(loopEntry)
+//                            convState = convState.apply(loopEntry)
+//                            // tODO: also agent conversation state
+//                        } else {
+//                            val conversationEntry = entry.maybeCast(ConversationEvent::class)
+//                            if (conversationEntry != null) {
+//                                convState.apply(conversationEntry)
+//                            }
+//                        }
+                        // TODO: position should be managed by a builder
+                        position = entry.context.storePosition
+                    }
                 }
 
                 // If the loop is in a state to accept messages, read new messages
                 if (loopState.loopStatus.canReceiveMessages) {
-                    var lastMessagePosition = loopState.lastMessagePosition
                     while (true) {
-                        val entries = conversationsStream.readAfter<ConversationEvent>(loopState.position, 10)
-                        if (entries.isEmpty())
-                            break
+                        val entries = gateway.readMessageEvents(lastMessagePosition, 10)
+                        if (entries.isEmpty()) break
                         for (entry in entries) {
-                            when (entry.event) {
-                                is ConversationEvent.MessagePosted -> {
-                                    loopStream.emit(LoopEvent.ConversationMessageReceived(entry.even))
-                                }
-                            }
-                            loopStream.emit(LoopEvent.ConversationMessageReceived(entry.event.))
-                            loopState = loopState.applyEvent(entry.event, entry.context)
+                            convState = convState.apply(entry)
+                            lastMessagePosition = entry.context.storePosition
                         }
                     }
 
+                    // Clear out any pending messages base on the loop state
+                    convState = convState.clearPendingMessages(loopState.lastIncludedMessageId)
                 }
-                val stepResult = stepFromState(loopState)
+
+                val stepResult = stepFromState(loopState, convState)
 
                 // If good, run a step from the current state
-                if (stepResult == LoopStatus.PENDING)
-                    continue
+                if (stepResult == LoopStatus.PENDING) continue
 
                 // wait for an event
                 println("Waiting for loop kick")
@@ -124,20 +117,19 @@ class AgentLoopStepper(
         }
     }
 
-    internal suspend fun stepFromState(loopState: LoopState): LoopStatus {
+    internal suspend fun stepFromState(loopState: LoopState, convState: AgentConversationState): LoopStatus {
 
         when (loopState.loopStatus) {
             LoopStatus.IN_STEP -> return LoopStatus.STUCK // TODO: somehow show this issue
             LoopStatus.STUCK -> return LoopStatus.STUCK
             LoopStatus.IDLE, LoopStatus.PENDING -> {
 
-                loopStream.emit(LoopEvent.StepStarted(clock.now()))
+                gateway.writeLoopEvents(listOf(LoopEvent.StepStarted()))
 
                 val result: LoopStatus = try {
                     when (loopState.assistantStatus) {
                         AssistantStatus.START, AssistantStatus.IDLE -> runIdle(
-                            loopState.assistantContext,
-                            collabState.pendingContent
+                            loopState.assistantContext, convState.pendingMessages
                         )
 
                         AssistantStatus.TOOL_USE -> runToolUse(/*state.context,*/ loopState.pendingToolUse/*, collabState.pendingContent*/)
@@ -148,7 +140,7 @@ class AgentLoopStepper(
                     LoopStatus.STUCK
                 }
 
-                loopStream.emit(LoopEvent.StepEnded(result, clock.now()))
+                gateway.writeLoopEvents(listOf(LoopEvent.StepEnded(result)))
 
                 return result
             }
@@ -159,23 +151,21 @@ class AgentLoopStepper(
         return LoopStatus.STUCK
     }
 
-    private suspend fun runPaused(context: List<com.xemantic.ai.anthropic.message.Message>): LoopStatus {
+    private suspend fun runPaused(context: List<Message>): LoopStatus {
         return runAssistantTurn(context)
     }
 
-    private suspend fun runIdle(context: List<com.xemantic.ai.anthropic.message.Message>, content: List<PendingCollaborationMessage>): LoopStatus {
-        if (content.isEmpty())
-            return LoopStatus.IDLE
+    private suspend fun runIdle(context: List<Message>, content: List<PendingCollaborationMessage>): LoopStatus {
+        if (content.isEmpty()) return LoopStatus.IDLE
 
         // add a new message from the content
-        val message = PreparedMessage.Builder().prepareCollaboratorMessages(content).build(_root_ide_package_.com.xemantic.ai.anthropic.message.Role.USER)
+        val message = PreparedMessage.Builder().prepareCollaboratorMessages(content).build(Role.USER)
 
         return runAssistantTurn(context, message)
     }
 
     private suspend fun runAssistantTurn(
-        context: List<com.xemantic.ai.anthropic.message.Message>,
-        preparedMessage: PreparedMessage? = null
+        context: List<Message>, preparedMessage: PreparedMessage? = null
     ): LoopStatus {
 
         // create MessageRequest
@@ -208,29 +198,29 @@ class AgentLoopStepper(
                     null -> throw IllegalStateException("No stop reason")
                 }
 
-                loopStream.emit(
-                    LoopEvent.AssistantTurnSucceeded(
-                        preparedMessage?.message,
-                        response.message,
-                        assistantStatus,
-                        preparedMessage?.satisfiedContentIds ?: emptySet()
+                gateway.writeLoopEvents(
+                    listOf(
+                        LoopEvent.AssistantTurnSucceeded(
+                            preparedMessage?.message,
+                            response.message,
+                            assistantStatus,
+                            preparedMessage?.lastSentMessageId
+                        )
                     )
                 )
-
-//                // TODO: fix dual write issue (prolly hop the message from the loop event)
-//                if (preparedMessage != null && preparedMessage.satisfiedContentIds.isNotEmpty())
-//                    collaborationStream.emit(MessagesSentToAssistant(agent, preparedMessage.satisfiedContentIds))
 
                 return LoopStatus.PENDING
             }
 
             is ClaudeApiClient.MessageResult.Error -> {
-                loopStream.emit(
-                    LoopEvent.AssistantTurnFailed(
-                        preparedMessage?.message,
-                        response.httpStatus.value,
-                        response.httpStatus.description,
-                        response.error
+                gateway.writeLoopEvents(
+                    listOf(
+                        LoopEvent.AssistantTurnFailed(
+                            preparedMessage?.message,
+                            response.httpStatus.value,
+                            response.httpStatus.description,
+                            response.error
+                        )
                     )
                 )
                 return LoopStatus.STUCK
@@ -240,80 +230,71 @@ class AgentLoopStepper(
 }
 
 @VisibleForTesting
-internal fun PreparedMessage.Builder.prepareCollaboratorMessages(list: List<PendingCollaborationMessage>):
-        PreparedMessage.Builder =
+internal fun PreparedMessage.Builder.prepareCollaboratorMessages(list: List<PendingCollaborationMessage>): PreparedMessage.Builder =
 
     apply {
-        for (collab in list)
-            for (content in collab.content)
-                when (content) {
-                    is Text -> prepareCollaboratorText(collab.from, collab.to, content, collab.id)
-                    is Document -> prepareCollaboratorDocument(collab.from, collab.to, content, collab.id)
-                    is Image -> prepareCollaboratorImage(collab.from, collab.to, content, collab.id)
-                    else -> throw IllegalArgumentException("Unsupported content type: ${content::class.simpleName}")
-                }
+        for (msg in list) for (content in msg.content) {
+            when (content) {
+                is Text -> prepareCollaboratorText(msg.from, msg.to, content, msg.id)
+                is Document -> prepareCollaboratorDocument(msg.from, msg.to, content, msg.id)
+                is Image -> prepareCollaboratorImage(msg.from, msg.to, content, msg.id)
+                else -> throw IllegalArgumentException("Unsupported content type: ${content::class.simpleName}")
+            }
+        }
     }
 
 
 @VisibleForTesting
 internal fun PreparedMessage.Builder.prepareCollaboratorText(
-    from: String,
-    target: String,
-    contentBlock: com.xemantic.ai.anthropic.content.Text,
-    contentId: UUID
-):
-        PreparedMessage.Builder =
-    apply {
-        // Find an XML delimiter tag that can be used
-        var tag = "collaborator_message"
-        while (contentBlock.text.contains("</$tag>"))
-            tag += "_outer"
+    from: CollaboratorName.Individual, target: CollaboratorName.Channel?, contentBlock: Text, contentId: MessageId
+): PreparedMessage.Builder = apply {
+    // Find an XML delimiter tag that can be used
+    var tag = "collaborator_message"
+    while (contentBlock.text.contains("</$tag>")) tag += "_outer"
 
-        val sb = StringBuilder()
-        sb.appendLine("Collaborator @$from said to $target:")
-        sb.appendLine("<$tag>")
-        sb.appendLine(contentBlock.text)
-        sb.append("</$tag>")
+    val sb = StringBuilder()
+    sb.appendLine("Collaborator $from said to ${target ?: "you"}:")
+    sb.appendLine("<$tag>")
+    sb.appendLine(contentBlock.text)
+    sb.append("</$tag>")
 
-        withContent(contentId, Text(sb.toString()))
-    }
+    withContent(contentId, Text(sb.toString()))
+}
 
 
 @VisibleForTesting
 internal fun PreparedMessage.Builder.prepareCollaboratorDocument(
-    collaborator: String,
-    target: String,
+    collaborator: CollaboratorName.Individual,
+    target: CollaboratorName.Channel?,
     contentBlock: Document,
-    contentId: UUID
-):
-        PreparedMessage.Builder =
+    contentId: MessageId
+): PreparedMessage.Builder =
 
-    apply { withContent(contentId, Text("Collaborator $collaborator is sending $target a document."), contentBlock) }
+    apply { withContent(contentId, Text("Collaborator $collaborator is sending ${target ?: "you"} a document."), contentBlock) }
 
 
 @VisibleForTesting
 internal fun PreparedMessage.Builder.prepareCollaboratorImage(
-    collaborator: String,
-    target: String,
+    collaborator: CollaboratorName.Individual,
+    target: CollaboratorName.Channel?,
     contentBlock: Image,
-    contentId: UUID
-):
-        PreparedMessage.Builder =
+    contentId: MessageId
+): PreparedMessage.Builder =
 
-    apply { withContent(contentId, Text("Collaborator $collaborator is sending $target an image."), contentBlock) }
+    apply { withContent(contentId, Text("Collaborator $collaborator is sending ${target ?: "you"} an image."), contentBlock) }
 
 
-internal class PreparedMessage(val message: Message, val satisfiedContentIds: Set<UUID>) {
+internal class PreparedMessage(val message: Message, val lastSentMessageId: MessageId?) {
     class Builder {
         private val content: MutableList<Content> = mutableListOf()
-        private val satisfiedContentIs: MutableSet<UUID> = mutableSetOf()
+        private var lastSentMessageId: MessageId? = null
 
-        fun withContent(contentId: UUID, vararg newContent: Content) = apply {
+        fun withContent(contentId: MessageId, vararg newContent: Content) = apply {
             content.addAll(newContent)
-            satisfiedContentIs.add(contentId)
+            lastSentMessageId = contentId
         }
 
-        fun build(role: Role) = PreparedMessage(Message(role, content.toList()), satisfiedContentIs.toSet())
+        fun build(role: Role) = PreparedMessage(Message(role, content.toList()), lastSentMessageId)
     }
 }
 

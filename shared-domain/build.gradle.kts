@@ -9,6 +9,8 @@ dependencies {
     implementation(libs.jnanoid)
     implementation(libs.arrow.core)
 
+    implementation(libs.xemanticAiToolSchema)
+    implementation(libs.xemanticAiMoney)
     testImplementation(libs.kotest.runner)
     testImplementation(libs.kotest.assertions)
 }

@@ -19,7 +19,7 @@ package com.xemantic.ai.anthropic.content
 import com.xemantic.ai.anthropic.cache.CacheControl
 import com.xemantic.ai.anthropic.citation.Citation
 //import com.xemantic.ai.file.magic.MediaType
-import kotlinx.io.files.Path
+// import kotlinx.io.files.Path
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.contracts.ExperimentalContracts

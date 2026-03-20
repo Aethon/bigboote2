@@ -19,7 +19,7 @@ import kotlinx.serialization.json.JsonObject
  * See Architecture doc Change Document v1.0 Section 5.2 / 5.4.
  */
 @Serializable
-sealed interface AgentEvent {
+sealed interface AgentEvent : Event {
 
     @Serializable
     @SerialName("AgentStarted")

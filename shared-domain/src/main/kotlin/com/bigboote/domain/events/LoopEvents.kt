@@ -11,8 +11,6 @@ import kotlinx.datetime.Instant
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 /**
  * Describes an event in an agent loop.
@@ -33,17 +31,15 @@ import kotlin.uuid.Uuid
  * See Architecture doc Change Document v1.0 Section 5.3 / 5.4.
  */
 @Serializable
-sealed interface LoopEvent {
+sealed interface LoopEvent :
+    Event {
 
     /**
      * The agent loop started a step.
-     *
-     * @property startedAt The time the step started.
      */
     @Serializable
     @SerialName("StepStarted")
-    data class StepStarted(
-        val startedAt: Instant,
+    class StepStarted(
     ) : LoopEvent
 
     /**
@@ -55,8 +51,7 @@ sealed interface LoopEvent {
     @Serializable
     @SerialName("StepEnded")
     data class StepEnded(
-        val result: LoopStatus,
-        val endedAt: Instant,
+        val result: LoopStatus
     ) : LoopEvent
 
     /**
@@ -68,17 +63,16 @@ sealed interface LoopEvent {
      * @property newMessage The message that was added to the assistant context, if any.
      * @property response The response received from the assistant.
      * @property assistantStatus The status of the assistant after the turn.
-     * @property satisfiedContentIds The IDs of the content blocks that were satisfied by this message.
+     * @property includedMessageId The last new message ID sent, if any;
+     * this and all previous messages have been sent to the assistant.
      */
     @Serializable
     @SerialName("AssistantTurnSucceeded")
-    data class AssistantTurnSucceeded
-    @OptIn(ExperimentalUuidApi::class)
-    constructor(
+    data class AssistantTurnSucceeded(
         val newMessage: Message? = null,
         val response: MessageResponse,
         val assistantStatus: AssistantStatus,
-        val satisfiedContentIds: Set<Uuid> = emptySet()
+        val includedMessageId: MessageId?
     ) : LoopEvent
 
     /**

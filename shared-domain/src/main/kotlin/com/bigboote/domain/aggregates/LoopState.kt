@@ -1,8 +1,8 @@
 package com.bigboote.domain.aggregates
 
-import com.bigboote.domain.events.StreamBasedState
-import com.bigboote.domain.events.EventContext
 import com.bigboote.domain.events.LoopEvent
+import com.bigboote.domain.events.NoContextStreamState
+import com.bigboote.domain.values.MessageId
 import com.xemantic.ai.anthropic.content.Content
 import com.xemantic.ai.anthropic.message.Message
 
@@ -11,10 +11,10 @@ data class LoopState(
     val pendingToolUse: List<Content>,
     val assistantStatus: AssistantStatus,
     val loopStatus: LoopStatus,
-    override val position: Long?
-) : StreamBasedState<LoopEvent> {
+    val lastIncludedMessageId: MessageId? = null
+) : NoContextStreamState<LoopEvent, LoopState>() {
 
-    override fun applyEvent(event: LoopEvent, context: EventContext): LoopState =
+    override fun apply(event: LoopEvent): LoopState =
         when (event) {
             is LoopEvent.StepStarted -> copy(loopStatus = LoopStatus.IN_STEP)
             is LoopEvent.StepEnded -> copy(loopStatus = event.result)
@@ -24,14 +24,18 @@ data class LoopState(
                 newContext.add(event.response.asContextMessage())
                 return copy(
                     assistantContext = newContext.toList(),
-                    assistantStatus = event.assistantStatus
+                    assistantStatus = event.assistantStatus,
+                    lastIncludedMessageId = event.includedMessageId ?: lastIncludedMessageId
                 )
             }
 
             is LoopEvent.AssistantTurnFailed -> this
             is LoopEvent.ToolUseRequested -> copy(pendingToolUse = pendingToolUse + event.content)
+
             is LoopEvent.ConversationMessageReceived -> this // TODO: add message to pending content
-        }.copy(position = context.streamPosition)
+            is LoopEvent.LLMRequestSent -> TODO()
+            is LoopEvent.LLMResponseReceived -> TODO()
+        }
 
     companion object {
         val START = LoopState(
@@ -39,7 +43,6 @@ data class LoopState(
             pendingToolUse = emptyList(),
             assistantStatus = AssistantStatus.START,
             loopStatus = LoopStatus.IDLE,
-            position = null
         )
     }
 }

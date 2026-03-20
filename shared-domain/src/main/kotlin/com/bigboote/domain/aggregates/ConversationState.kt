@@ -1,31 +1,29 @@
 package com.bigboote.domain.aggregates
 
-import com.bigboote.domain.events.ConversationEvent
-import com.bigboote.domain.events.ConversationEvent.*
+import com.bigboote.domain.events.GroupChannelEvent.*
+import com.bigboote.domain.events.EventLogEntry
+import com.bigboote.domain.events.GroupChannelEvent
+import com.bigboote.domain.events.NoContextStreamState
+import com.bigboote.domain.events.StreamStateStarter
 import com.bigboote.domain.values.*
-import kotlinx.datetime.Instant
 
-data class ConversationState(
-    val convName: CollaboratorName,
-    val members: List<CollaboratorName>,
-    val createdAt: Instant
-) : NoContextStreamState<ConversationEvent, ConversationState>() {
-    override fun apply(event: ConversationEvent): ConversationState {
+data class GroupChannelState(
+    val members: List<CollaboratorName.Individual>
+) : NoContextStreamState<GroupChannelEvent, GroupChannelState>() {
+    override fun apply(event: GroupChannelEvent): GroupChannelState {
         return when (event) {
-            is ConversationCreated -> throw IllegalStateException("Conversation already created")
-            is MemberAdded -> copy(members = members + event.member)
+            is ChannelCreated -> throw IllegalStateException("Channel already created")
+            is MembersAdded -> copy(members = members + event.members)
             is MessagePosted -> this
         }
     }
 
-    companion object: StreamStateStarter<ConversationEvent, ConversationState> {
-        override fun start(entry: EventLogEntry<ConversationEvent>): ConversationState {
-            val event = entry.event as? ConversationCreated
-                ?: throw IllegalArgumentException("Must start with ConversationCreated event")
-            return ConversationState(
-                convName = event.convName,
-                members = event.members,
-                createdAt = event.createdAt
+    companion object: StreamStateStarter<GroupChannelEvent, GroupChannelState> {
+        override fun start(entry: EventLogEntry<GroupChannelEvent>): GroupChannelState {
+            val event = entry.event as? ChannelCreated
+                ?: throw IllegalArgumentException("Must start with ChannelCreated event")
+            return GroupChannelState(
+                members = event.members
             )
         }
     }

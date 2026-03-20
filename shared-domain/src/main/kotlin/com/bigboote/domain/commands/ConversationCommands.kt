@@ -5,23 +5,21 @@ import com.bigboote.domain.values.*
 sealed interface ConversationCommand {
 
     data class CreateChannel(
-        val convId: ConvId,
         val effortId: EffortId,
-        val convName: CollaboratorName,
-        val members: List<CollaboratorName>,
+        val channelName: CollaboratorName.Channel,
+        val members: List<CollaboratorName>
     ) : ConversationCommand
 
     data class PostMessage(
-        val messageId: MessageId,
-        val convId: String?,
         val effortId: EffortId,
-        val from: CollaboratorName,
+        val channelName: CollaboratorName.Channel,
+        val from: CollaboratorName.Individual,
         val body: String,
     ) : ConversationCommand
 
-    data class AddMember(
-        val convId: String,
+    data class AddMembers(
         val effortId: EffortId,
-        val member: CollaboratorName,
+        val channelName: CollaboratorName.Channel,
+        val members: Set<CollaboratorName.Individual>,
     ) : ConversationCommand
 }
