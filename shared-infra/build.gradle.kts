@@ -23,5 +23,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.testcontainers.core)
     testImplementation(libs.testcontainers.postgresql)
+    testImplementation(libs.testcontainers.localstack)
     testImplementation(libs.testcontainers.junit)
+    testImplementation(libs.aws.sdk.java.s3)
 }
