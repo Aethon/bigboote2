@@ -12,15 +12,13 @@ import kotlinx.serialization.encoding.Encoder
 @Serializable(with = MessageId.Serializer::class)
 value class MessageId(val value: String) {
     init {
-        require(value.startsWith(PREFIX)) { "MessageId must start with '$PREFIX'" }
+       // TODO: validate format
     }
 
     override fun toString(): String = value
 
     companion object {
-        private const val PREFIX = "msg:"
-
-        fun generate(): MessageId = MessageId("$PREFIX${NanoIdUtils.randomNanoId()}")
+        fun generate(): MessageId = MessageId(NanoIdUtils.randomNanoId())
     }
 
     internal object Serializer : KSerializer<MessageId> {

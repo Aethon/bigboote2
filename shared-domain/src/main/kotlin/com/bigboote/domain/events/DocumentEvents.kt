@@ -15,7 +15,8 @@ import kotlinx.serialization.Serializable
  * See Architecture doc Change Document v1.0 Section 5.6.
  */
 @Serializable
-sealed interface DocumentEvent {
+sealed interface DocumentEvent :
+    Event {
 
     @Serializable
     @SerialName("DocumentCreated")

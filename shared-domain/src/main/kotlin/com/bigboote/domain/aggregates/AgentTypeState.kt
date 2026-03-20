@@ -2,6 +2,9 @@ package com.bigboote.domain.aggregates
 
 import com.bigboote.domain.events.AgentTypeEvent
 import com.bigboote.domain.events.AgentTypeEvent.*
+import com.bigboote.domain.events.EventLogEntry
+import com.bigboote.domain.events.NoContextStreamState
+import com.bigboote.domain.events.StreamStateStarter
 import com.bigboote.domain.values.AgentTypeId
 import kotlinx.datetime.Instant
 

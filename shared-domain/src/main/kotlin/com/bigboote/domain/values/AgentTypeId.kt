@@ -11,24 +11,20 @@ import kotlinx.serialization.encoding.Encoder
 @Serializable(with = AgentTypeId.Serializer::class)
 value class AgentTypeId(val value: String) {
     init {
-        require(value.startsWith(PREFIX)) { "AgentTypeId must start with '$PREFIX'" }
-        val slug = value.removePrefix(PREFIX)
-        require(slug.length <= MAX_SLUG_LENGTH) {
-            "AgentTypeId slug must be at most $MAX_SLUG_LENGTH characters, got: ${slug.length}"
+        require(value.length <= MAX_SLUG_LENGTH) {
+            "AgentTypeId slug must be at most $MAX_SLUG_LENGTH characters, got: ${value.length}"
         }
-        require(slug.matches(SLUG_REGEX)) {
-            "AgentTypeId slug must be lowercase alphanumeric with hyphens, got: '$slug'"
+        require(value.matches(SLUG_REGEX)) {
+            "AgentTypeId slug must be lowercase alphanumeric with hyphens, got: '$value'"
         }
     }
 
     override fun toString(): String = value
 
     companion object {
-        private const val PREFIX = "agenttype:"
         private const val MAX_SLUG_LENGTH = 64
         private val SLUG_REGEX = Regex("^[a-z0-9]+(-[a-z0-9]+)*$")
 
-        fun of(slug: String): AgentTypeId = AgentTypeId("$PREFIX$slug")
     }
 
     internal object Serializer : KSerializer<AgentTypeId> {

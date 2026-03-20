@@ -31,9 +31,9 @@ class AgentControlHandler {
 
     fun status(): StatusResponse {
         return StatusResponse(
-            instanceId = instanceId.get() ?: AgentId("agent:uninitialized"),
-            effortId = effortId.get() ?: EffortId("effort:uninitialized"),
-            agentTypeId = agentTypeId.get() ?: AgentTypeId.of("unknown"),
+            instanceId = instanceId.get() ?: AgentId("uninitialized"),
+            effortId = effortId.get() ?: EffortId("uninitialized"),
+            agentTypeId = agentTypeId.get() ?: AgentTypeId("unknown"),
             loopState = loopState.get(),
             currentTurn = currentTurn.get(),
             lastActivityAt = lastActivityAt.get()?.toString(),
@@ -52,7 +52,7 @@ class AgentControlHandler {
     }
 
     fun pause(): AckResponse {
-        val id = instanceId.get() ?: AgentId("agent:uninitialized")
+        val id = instanceId.get() ?: AgentId("uninitialized")
         logger.info("Pausing agent loop for instance={}", id)
         loopState.set("paused")
         lastActivityAt.set(Clock.System.now())
@@ -60,7 +60,7 @@ class AgentControlHandler {
     }
 
     fun resume(): AckResponse {
-        val id = instanceId.get() ?: AgentId("agent:uninitialized")
+        val id = instanceId.get() ?: AgentId("uninitialized")
         logger.info("Resuming agent loop for instance={}", id)
         loopState.set("running")
         lastActivityAt.set(Clock.System.now())
@@ -68,7 +68,7 @@ class AgentControlHandler {
     }
 
     fun stop(): AckResponse {
-        val id = instanceId.get() ?: AgentId("agent:uninitialized")
+        val id = instanceId.get() ?: AgentId("uninitialized")
         logger.info("Stopping agent loop for instance={}", id)
         loopState.set("stopped")
         lastActivityAt.set(Clock.System.now())

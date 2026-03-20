@@ -15,7 +15,8 @@ import kotlinx.serialization.Serializable
  * See Architecture doc Change Document v1.0 Section 5.1.
  */
 @Serializable
-sealed interface EffortEvent {
+sealed interface EffortEvent :
+    Event {
 
     @Serializable
     @SerialName("EffortCreated")

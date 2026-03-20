@@ -15,10 +15,12 @@ import kotlinx.serialization.encoding.Encoder
 sealed class CollaboratorName {
     abstract val simple: String
 
+    @Serializable(with = IndividualCollaboratorSerializer::class)
     data class Individual(override val simple: String) : CollaboratorName() {
         override fun toString(): String = "@$simple"
     }
 
+    @Serializable(with = ChannelCollaboratorSerializer::class)
     data class Channel(override val simple: String) : CollaboratorName() {
         override fun toString(): String = "#$simple"
     }
@@ -42,4 +44,24 @@ internal object CollaboratorNameSerializer : KSerializer<CollaboratorName> {
 
     override fun deserialize(decoder: Decoder): CollaboratorName =
         CollaboratorName.from(decoder.decodeString())
+}
+
+internal object IndividualCollaboratorSerializer : KSerializer<CollaboratorName.Individual> {
+    override val descriptor = PrimitiveSerialDescriptor("CollaboratorName.Individual", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: CollaboratorName.Individual) =
+        encoder.encodeString(value.toString())
+
+    override fun deserialize(decoder: Decoder): CollaboratorName.Individual =
+        CollaboratorName.Individual(decoder.decodeString().removePrefix("@"))
+}
+
+internal object ChannelCollaboratorSerializer : KSerializer<CollaboratorName.Channel> {
+    override val descriptor = PrimitiveSerialDescriptor("CollaboratorName.Channel", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: CollaboratorName.Channel) =
+        encoder.encodeString(value.toString())
+
+    override fun deserialize(decoder: Decoder): CollaboratorName.Channel =
+        CollaboratorName.Channel(decoder.decodeString().removePrefix("#"))
 }

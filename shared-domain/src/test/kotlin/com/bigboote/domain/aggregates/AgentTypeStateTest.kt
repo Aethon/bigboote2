@@ -2,6 +2,8 @@ package com.bigboote.domain.aggregates
 
 import com.bigboote.domain.events.AgentTypeEvent
 import com.bigboote.domain.events.AgentTypeEvent.*
+import com.bigboote.domain.events.EventContext
+import com.bigboote.domain.events.EventLogEntry
 import com.bigboote.domain.values.AgentTypeId
 import com.bigboote.domain.values.StreamName
 import io.kotest.core.spec.style.StringSpec
@@ -11,10 +13,10 @@ import kotlinx.datetime.Clock
 class AgentTypeStateTest : StringSpec({
 
     val now = Clock.System.now()
-    val agentTypeId = AgentTypeId.of("lead-eng")
+    val agentTypeId = AgentTypeId("lead-eng")
     val streamName = StreamName.AgentType(agentTypeId)
 
-    val createdEvent = EventLogEntryImpl<AgentTypeEvent>(
+    val createdEvent = EventLogEntry<AgentTypeEvent>(
         streamName = streamName,
         event = AgentTypeCreated(
             name = "Lead Engineer",
@@ -42,7 +44,7 @@ class AgentTypeStateTest : StringSpec({
     "apply AgentTypeCreated with null optionals uses defaults" {
         val originalEvent = createdEvent.event as AgentTypeCreated
         val newEntry =
-            EventLogEntryImpl(streamName, originalEvent.copy(temperature = null, tools = null), EventContext(1, 2))
+            EventLogEntry(streamName, originalEvent.copy(temperature = null, tools = null), EventContext(1, 2))
         val state = AgentTypeState.start(newEntry)
         state.temperature shouldBe 0.0
         state.tools shouldBe emptyList()
@@ -52,7 +54,7 @@ class AgentTypeStateTest : StringSpec({
         val state = AgentTypeState
             .start(createdEvent)
             .apply(
-                EventLogEntryImpl(
+                EventLogEntry(
                     streamName,
                     AgentTypeUpdated(
                         name = "Senior Engineer",
@@ -74,7 +76,7 @@ class AgentTypeStateTest : StringSpec({
     "apply AgentTypeUpdated with all null fields preserves state" {
         val before = AgentTypeState.start(createdEvent)
         val after = before.apply(
-            EventLogEntryImpl(streamName, AgentTypeUpdated(updatedAt = now), EventContext(1, 2))
+            EventLogEntry(streamName, AgentTypeUpdated(updatedAt = now), EventContext(1, 2))
         )
         after.name shouldBe before.name
         after.model shouldBe before.model
@@ -90,7 +92,7 @@ class AgentTypeStateTest : StringSpec({
         val state = AgentTypeState
             .start(createdEvent)
             .apply(
-                EventLogEntryImpl(
+                EventLogEntry(
                     streamName,
                     AgentTypeUpdated(
                         tools = listOf("deploy"),

@@ -1,5 +1,6 @@
 package com.bigboote.events.eventstore
 
+import com.bigboote.domain.events.Event
 import com.bigboote.domain.values.StreamName
 import kotlin.reflect.KClass
 
@@ -30,7 +31,7 @@ interface EventStore {
      * @param expectedVersion Concurrency control: Any, NoStream, or Exact(version)
      * @return AppendResult containing the next expected version
      */
-    suspend fun <E : Any> appendToStream(
+    suspend fun <E : Event> appendToStream(
         streamName: StreamName<E>,
         events: List<E>,
         expectedVersion: ExpectedVersion = ExpectedVersion.Any,
@@ -44,7 +45,7 @@ interface EventStore {
      * @param maxCount Maximum number of events to read
      * @return ReadResult containing deserialized event envelopes
      */
-    suspend fun <E: Any> readStreamForward(
+    suspend fun <E: Event> readStreamForward(
         eventKlass: KClass<E>,
         streamName: StreamName<E>,
         fromVersion: Long = 0L,
@@ -60,7 +61,7 @@ interface EventStore {
      * @param handler Callback invoked for each typed event envelope
      * @return EventSubscription handle to stop the subscription
      */
-    fun <E : Any> subscribeToStream(
+    fun <E : Event> subscribeToStream(
         streamName: StreamName<E>,
         fromVersion: Long,
         handler: suspend (EventEnvelope<E>) -> Unit,
@@ -75,7 +76,7 @@ interface EventStore {
      * @param handler Callback invoked for each typed event envelope
      * @return EventSubscription handle to stop the subscription
      */
-    fun <E : Any> subscribePersistent(
+    fun <E : Event> subscribePersistent(
         streamName: StreamName<E>,
         groupName: String,
         handler: suspend (EventEnvelope<E>) -> Unit,
