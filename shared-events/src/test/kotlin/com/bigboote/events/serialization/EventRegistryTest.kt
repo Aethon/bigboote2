@@ -24,7 +24,8 @@ class EventRegistryTest : StringSpec({
         EffortEvent::class.sealedSubclasses.forEach { add(it.java) }
         AgentEvent::class.sealedSubclasses.forEach { add(it.java) }
         LoopEvent::class.sealedSubclasses.forEach { add(it.java) }
-        ConversationEvent::class.sealedSubclasses.forEach { add(it.java) }
+        GroupChannelEvent::class.sealedSubclasses.forEach { add(it.java) }
+        DirectMessageEvent::class.sealedSubclasses.forEach { add(it.java) }
         DocumentEvent::class.sealedSubclasses.forEach { add(it.java) }
         AgentTypeEvent::class.sealedSubclasses.forEach { add(it.java) }
     }
@@ -63,8 +64,10 @@ class EventRegistryTest : StringSpec({
             // Loop events
             "StepStarted", "StepEnded", "AssistantTurnSucceeded",
             "AssistantTurnFailed", "ToolUseRequested", "ConversationMessageReceived",
-            // Conversation events
-            "ConversationCreated", "MemberAdded", "MessagePosted",
+            // GroupChannel events
+            "ChannelCreated", "MembersAdded", "ChannelMessagePosted",
+            // DirectMessage events
+            "DirectMessagePosted",
             // Document events
             "DocumentCreated", "DocumentUpdated", "DocumentDeleted",
             // AgentType events

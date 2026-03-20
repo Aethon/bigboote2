@@ -31,7 +31,7 @@ class GroupChannelStateTest : StringSpec({
 
     val messagePostedEventEntry = EventLogEntry(
         streamName = streamName,
-        event = MessagePosted(
+        event = ChannelMessagePosted(
             messageId = MessageId("msg:123"),
             from = CollaboratorName.Individual("alice"),
             to = setOf(CollaboratorName.Individual("lead-dev")),

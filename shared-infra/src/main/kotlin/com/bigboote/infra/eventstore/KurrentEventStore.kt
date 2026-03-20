@@ -1,8 +1,8 @@
 package com.bigboote.infra.eventstore
 
-import com.bigboote.domain.aggregates.EventContext
-import com.bigboote.domain.aggregates.EventLogEntry
-import com.bigboote.domain.aggregates.EventLogEntryImpl
+import com.bigboote.domain.events.Event
+import com.bigboote.domain.events.EventContext
+import com.bigboote.domain.events.EventLogEntry
 import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.AppendResult
 import com.bigboote.events.eventstore.EventEnvelope
@@ -78,7 +78,7 @@ class KurrentEventStore(
         return AppendResult(nextExpectedVersion = nextExpected)
     }
 
-    override suspend fun <E: Any> readStreamForward(
+    override suspend fun <E: Event> readStreamForward(
         eventKlass: KClass<E>,
         streamName: StreamName<E>,
         fromVersion: Long,
@@ -248,10 +248,10 @@ class KurrentEventStore(
      * Convert a [ResolvedEvent] to an [EventEnvelope] for a known typed stream.
      * The [streamName] carries the contextual identity (effortId, agentId, etc.).
      */
-    private fun <E: Any> ResolvedEvent.toStreamEntry(streamName: StreamName<E>, eventKlass: KClass<E>): EventLogEntry<E> {
+    private fun <E: Event> ResolvedEvent.toStreamEntry(streamName: StreamName<E>, eventKlass: KClass<E>): EventLogEntry<E> {
         val recorded = this.originalEvent
         val data = EventDeserializer.deserialize(recorded)
-        return EventLogEntryImpl(
+        return EventLogEntry(
             streamName = streamName,
             event = eventKlass.cast(data),
             context = EventContext(

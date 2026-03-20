@@ -1,5 +1,6 @@
 package com.bigboote.events.eventstore
 
+import com.bigboote.domain.events.Event
 import com.bigboote.domain.values.StreamName
 import kotlin.reflect.KClass
 
@@ -44,7 +45,7 @@ interface EventStore {
      * @param maxCount Maximum number of events to read
      * @return ReadResult containing deserialized event envelopes
      */
-    suspend fun <E: Any> readStreamForward(
+    suspend fun <E: Event> readStreamForward(
         eventKlass: KClass<E>,
         streamName: StreamName<E>,
         fromVersion: Long = 0L,

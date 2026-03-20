@@ -63,7 +63,7 @@ sealed interface LoopEvent :
      * @property newMessage The message that was added to the assistant context, if any.
      * @property response The response received from the assistant.
      * @property assistantStatus The status of the assistant after the turn.
-     * @property includedMessageId The last new message ID sent, if any;
+     * @property lastSentMessageId The last new message ID sent, if any;
      * this and all previous messages have been sent to the assistant.
      */
     @Serializable
@@ -72,7 +72,7 @@ sealed interface LoopEvent :
         val newMessage: Message? = null,
         val response: MessageResponse,
         val assistantStatus: AssistantStatus,
-        val includedMessageId: MessageId?
+        val lastSentMessageId: MessageId?
     ) : LoopEvent
 
     /**

@@ -4,7 +4,6 @@ import com.bigboote.domain.aggregates.AssistantStatus
 import com.bigboote.domain.aggregates.LoopStatus
 import com.bigboote.domain.events.LoopEvent.*
 import com.bigboote.domain.values.*
-import com.xemantic.ai.anthropic.Response
 import com.xemantic.ai.anthropic.content.Text
 import com.xemantic.ai.anthropic.error.ErrorResponse
 import com.xemantic.ai.anthropic.error.MessageError
@@ -15,16 +14,14 @@ import com.xemantic.ai.anthropic.message.StopReason
 import com.xemantic.ai.anthropic.usage.Usage
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
-import kotlinx.datetime.Clock
 import kotlinx.serialization.json.*
 
 class LoopEventsSerializationTest : StringSpec({
 
     val json = Json { encodeDefaults = true }
-    val now = Clock.System.now()
 
     "StepStarted round-trip" {
-        val event: LoopEvent = StepStarted(startedAt = now)
+        val event: LoopEvent = StepStarted()
         val encoded = json.encodeToString<LoopEvent>(event)
         val decoded = json.decodeFromString<LoopEvent>(encoded)
         decoded shouldBe event
@@ -32,8 +29,7 @@ class LoopEventsSerializationTest : StringSpec({
 
     "StepEnded round-trip" {
         val event: LoopEvent = StepEnded(
-            result = LoopStatus.PENDING,
-            endedAt = now,
+            result = LoopStatus.PENDING
         )
         val encoded = json.encodeToString<LoopEvent>(event)
         val decoded = json.decodeFromString<LoopEvent>(encoded)
@@ -59,7 +55,7 @@ class LoopEventsSerializationTest : StringSpec({
                 }
             ),
             assistantStatus = AssistantStatus.IDLE,
-            satisfiedContentIds = setOf(MessageId("msg:test1"))
+            lastSentMessageId = MessageId("msg:test1")
         )
         val encoded = json.encodeToString<LoopEvent>(event)
         val decoded = json.decodeFromString<LoopEvent>(encoded)
@@ -81,7 +77,8 @@ class LoopEventsSerializationTest : StringSpec({
                     outputTokens = 200
                 }
             ),
-            assistantStatus = AssistantStatus.PAUSED
+            assistantStatus = AssistantStatus.PAUSED,
+            lastSentMessageId = null
         )
         val encoded = json.encodeToString<LoopEvent>(event)
         val decoded = json.decodeFromString<LoopEvent>(encoded)

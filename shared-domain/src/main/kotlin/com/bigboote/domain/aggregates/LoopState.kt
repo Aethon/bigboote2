@@ -25,7 +25,7 @@ data class LoopState(
                 return copy(
                     assistantContext = newContext.toList(),
                     assistantStatus = event.assistantStatus,
-                    lastIncludedMessageId = event.includedMessageId ?: lastIncludedMessageId
+                    lastIncludedMessageId = event.lastSentMessageId ?: lastIncludedMessageId
                 )
             }
 

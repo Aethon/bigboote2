@@ -10,8 +10,6 @@ import kotlinx.datetime.Clock
 class AgentInstanceStateTest : StringSpec({
 
     val now = Clock.System.now()
-    val agentId = AgentId("agent:test123")
-    val effortId = EffortId("effort:test123")
 
     val startedEvent = AgentStarted(
         agentTypeId = AgentTypeId.of("lead-eng"),
@@ -60,23 +58,23 @@ class AgentInstanceStateTest : StringSpec({
     "apply StepStarted transitions loopStatus to IN_STEP" {
         val state = AgentInstanceState.EMPTY
             .apply(startedEvent)
-            .apply(StepStarted(now))
+            .apply(StepStarted())
         state.loopStatus shouldBe LoopStatus.IN_STEP
     }
 
     "apply StepEnded sets loopStatus to result" {
         val state = AgentInstanceState.EMPTY
             .apply(startedEvent)
-            .apply(StepStarted(now))
-            .apply(StepEnded(LoopStatus.PENDING, now))
+            .apply(StepStarted())
+            .apply(StepEnded(LoopStatus.PENDING))
         state.loopStatus shouldBe LoopStatus.PENDING
     }
 
     "apply StepEnded with IDLE result" {
         val state = AgentInstanceState.EMPTY
             .apply(startedEvent)
-            .apply(StepStarted(now))
-            .apply(StepEnded(LoopStatus.IDLE, now))
+            .apply(StepStarted())
+            .apply(StepEnded(LoopStatus.IDLE))
         state.loopStatus shouldBe LoopStatus.IDLE
     }
 

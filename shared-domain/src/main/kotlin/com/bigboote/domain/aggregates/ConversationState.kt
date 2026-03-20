@@ -14,7 +14,7 @@ data class GroupChannelState(
         return when (event) {
             is ChannelCreated -> throw IllegalStateException("Channel already created")
             is MembersAdded -> copy(members = members + event.members)
-            is MessagePosted -> this
+            is ChannelMessagePosted -> this
         }
     }
 

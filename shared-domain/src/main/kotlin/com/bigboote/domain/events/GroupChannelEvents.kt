@@ -29,8 +29,8 @@ sealed interface GroupChannelEvent :
     ) : GroupChannelEvent
 
     @Serializable
-    @SerialName("MessagePosted")
-    data class MessagePosted(
+    @SerialName("ChannelMessagePosted")
+    data class ChannelMessagePosted(
         val messageId: MessageId,
         @Contextual
         val from: CollaboratorName.Individual,

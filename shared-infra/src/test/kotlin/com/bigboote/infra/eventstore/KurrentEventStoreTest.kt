@@ -1,6 +1,5 @@
 package com.bigboote.infra.eventstore
 
-import com.bigboote.domain.aggregates.EventContext
 import com.bigboote.domain.events.EffortEvent
 import com.bigboote.domain.events.EffortEvent.EffortCreated
 import com.bigboote.domain.events.EffortEvent.EffortStarted
@@ -21,10 +20,6 @@ import org.testcontainers.utility.DockerImageName
 /**
  * Integration test for KurrentEventStore using TestContainers.
  * Verifies append and read-back of events against a real KurrentDB instance.
- *
- * Uses the typed [StreamName] hierarchy — stream names are now constructed via
- * [StreamName.Effort] rather than the deprecated [com.bigboote.events.streams.StreamNames].
- * Event payloads no longer carry [EffortId] (removed in stream-names change).
  */
 class KurrentEventStoreTest : StringSpec({
 

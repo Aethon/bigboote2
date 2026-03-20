@@ -11,7 +11,7 @@ class DirectMessageEventsSerializationTest : StringSpec({
     val json = Json { encodeDefaults = true }
 
     "MessagePosted round-trip" {
-        val event: DirectMessageEvent = MessagePosted(
+        val event: DirectMessageEvent = DirectMessagePosted(
             messageId = MessageId("msg:test1"),
             from = CollaboratorName.Individual("alice"),
             body = "One comment on the token expiry logic."
@@ -22,7 +22,7 @@ class DirectMessageEventsSerializationTest : StringSpec({
     }
 
     "MessagePosted from system round-trip" {
-        val event: DirectMessageEvent = MessagePosted(
+        val event: DirectMessageEvent = DirectMessagePosted(
             messageId = MessageId("msg:sys1"),
             from = CollaboratorName.Individual("system"),
             body = "Effort has been paused by the Coordinator."

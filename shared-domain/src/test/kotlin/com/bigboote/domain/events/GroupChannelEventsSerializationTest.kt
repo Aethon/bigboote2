@@ -45,7 +45,7 @@ class GroupChannelEventsSerializationTest : StringSpec({
     }
 
     "MessagePosted round-trip" {
-        val event: GroupChannelEvent = MessagePosted(
+        val event: GroupChannelEvent = ChannelMessagePosted(
             messageId = MessageId("msg:test1"),
             from = CollaboratorName.Individual("alice"),
             to = setOf(CollaboratorName.Individual("lead-dev")),
@@ -57,7 +57,7 @@ class GroupChannelEventsSerializationTest : StringSpec({
     }
 
     "MessagePosted from system round-trip" {
-        val event: GroupChannelEvent = MessagePosted(
+        val event: GroupChannelEvent = ChannelMessagePosted(
             messageId = MessageId("msg:sys1"),
             from = CollaboratorName.Individual("system"),
             to = setOf(CollaboratorName.Individual("lead-dev")),

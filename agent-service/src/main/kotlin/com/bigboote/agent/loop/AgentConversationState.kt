@@ -40,7 +40,7 @@ data class AgentConversationState(
 
     private fun applyDirectMessageEvent(entry: EventLogEntry<DirectMessageEvent>): AgentConversationState {
         return when (val event = entry.event) {
-            is DirectMessageEvent.MessagePosted -> copy(
+            is DirectMessageEvent.DirectMessagePosted -> copy(
                 pendingMessages = pendingMessages + PendingCollaborationMessage(
                     event.messageId, event.from, null, listOf(Text(event.body))
                 )
@@ -56,7 +56,7 @@ data class AgentConversationState(
             is ChannelCreated -> this
             is MembersAdded -> this
 
-            is GroupChannelEvent.MessagePosted ->
+            is GroupChannelEvent.ChannelMessagePosted ->
                 copy(
                     pendingMessages = pendingMessages + PendingCollaborationMessage(
                         event.messageId, event.from, stream.channelName, listOf(Text(event.body))

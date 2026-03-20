@@ -2,7 +2,8 @@ package com.bigboote.events.serialization
 
 import com.bigboote.domain.events.AgentEvent.*
 import com.bigboote.domain.events.AgentTypeEvent.*
-import com.bigboote.domain.events.ConversationEvent.*
+import com.bigboote.domain.events.DirectMessageEvent.*
+import com.bigboote.domain.events.GroupChannelEvent.*
 import com.bigboote.domain.events.DocumentEvent.*
 import com.bigboote.domain.events.EffortEvent.*
 import com.bigboote.domain.events.LoopEvent.*
@@ -48,10 +49,13 @@ object EventRegistry {
         Registration("ToolUseRequested", ToolUseRequested.serializer(), ToolUseRequested::class.java),
         Registration("ConversationMessageReceived", ConversationMessageReceived.serializer(), ConversationMessageReceived::class.java),
 
-        // Conversation events
-        Registration("ConversationCreated", ConversationCreated.serializer(), ConversationCreated::class.java),
-        Registration("MemberAdded", MemberAdded.serializer(), MemberAdded::class.java),
-        Registration("MessagePosted", MessagePosted.serializer(), MessagePosted::class.java),
+        // GroupChannel events
+        Registration("ChannelCreated", ChannelCreated.serializer(), ChannelCreated::class.java),
+        Registration("MembersAdded", MembersAdded.serializer(), MembersAdded::class.java),
+        Registration("MessagePosted", ChannelMessagePosted.serializer(), ChannelMessagePosted::class.java),
+
+        // DirectMessage events
+        Registration("DirectMessagePosted", DirectMessagePosted.serializer(), DirectMessagePosted::class.java),
 
         // Document events
         Registration("DocumentCreated", DocumentCreated.serializer(), DocumentCreated::class.java),

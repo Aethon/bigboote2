@@ -1,7 +1,6 @@
 package com.bigboote.domain.events
 
 import com.bigboote.domain.values.*
-import kotlinx.datetime.Instant
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -16,8 +15,8 @@ sealed interface DirectMessageEvent :
     Event {
 
     @Serializable
-    @SerialName("MessagePosted")
-    data class MessagePosted(
+    @SerialName("DirectMessagePosted")
+    data class DirectMessagePosted(
         val messageId: MessageId,
         @Contextual
         val from: CollaboratorName.Individual,

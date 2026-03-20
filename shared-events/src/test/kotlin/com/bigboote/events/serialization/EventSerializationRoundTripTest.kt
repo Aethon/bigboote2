@@ -4,9 +4,9 @@ import com.bigboote.domain.aggregates.AssistantStatus
 import com.bigboote.domain.aggregates.LoopStatus
 import com.bigboote.domain.events.AgentEvent.*
 import com.bigboote.domain.events.AgentTypeEvent.*
-import com.bigboote.domain.events.ConversationEvent.*
 import com.bigboote.domain.events.DocumentEvent.*
 import com.bigboote.domain.events.EffortEvent.*
+import com.bigboote.domain.events.GroupChannelEvent
 import com.bigboote.domain.events.LoopEvent.*
 import com.bigboote.domain.values.*
 import io.kotest.core.spec.style.StringSpec
@@ -14,7 +14,6 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotBeEmpty
 import kotlinx.datetime.Clock
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -212,17 +211,14 @@ class EventSerializationRoundTripTest : StringSpec({
 
     "StepStarted round-trip through EventRegistry" {
         roundTrip(
-            StepStarted(
-                startedAt = now,
-            )
+            StepStarted()
         )
     }
 
     "StepEnded round-trip through EventRegistry" {
         roundTrip(
             StepEnded(
-                result = LoopStatus.PENDING,
-                endedAt = now,
+                result = LoopStatus.PENDING
             )
         )
     }
@@ -278,50 +274,38 @@ class EventSerializationRoundTripTest : StringSpec({
         )
     }
 
-    "ConversationMessageReceived round-trip through EventRegistry" {
-        roundTrip(
-            ConversationMessageReceived(
-                messageId = MessageId("msg:Xn4wQpL7jTtest"),
-                convName = CollaboratorName.Channel("review"),
-                from = CollaboratorName.Individual("alice"),
-                body = "One comment on the token expiry logic.",
-                receivedAt = now,
-            )
-        )
-    }
-
     // --- Conversation Events ---
 
-    "ConversationCreated round-trip through EventRegistry" {
+    "ChannelCreated round-trip through EventRegistry" {
         roundTrip(
-            ConversationCreated(
-                convName = CollaboratorName.Channel("review"),
+            GroupChannelEvent.ChannelCreated(
                 members = listOf(
                     CollaboratorName.Individual("lead-dev"),
                     CollaboratorName.Individual("reviewer"),
                     CollaboratorName.Individual("alice"),
-                ),
-                createdAt = now,
+                )
             )
         )
     }
 
     "MemberAdded round-trip through EventRegistry" {
         roundTrip(
-            MemberAdded(
-                member = CollaboratorName.Individual("bob"),
-                addedAt = now,
+            GroupChannelEvent.MembersAdded(
+                members = setOf(CollaboratorName.Individual("bob"))
             )
         )
     }
 
     "MessagePosted round-trip through EventRegistry" {
         roundTrip(
-            MessagePosted(
+            GroupChannelEvent.ChannelMessagePosted(
                 messageId = MessageId("msg:Xn4wQpL7jTtest"),
                 from = CollaboratorName.Individual("alice"),
-                body = "One comment on the token expiry logic.",
-                postedAt = now,
+                to = setOf(
+                    CollaboratorName.Individual("lead-dev"),
+                    CollaboratorName.Individual("reviewer")
+                ),
+                body = "One comment on the token expiry logic."
             )
         )
     }
