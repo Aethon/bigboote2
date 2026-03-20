@@ -1,11 +1,9 @@
 package com.bigboote.coordinator.system
 
 import com.bigboote.coordinator.aggregates.conversation.ConversationCommandHandler
-import com.bigboote.domain.commands.ConversationCommand.PostMessage
+import com.bigboote.domain.commands.ConversationCommand.PostDirectMessage
 import com.bigboote.domain.values.CollaboratorName
-import com.bigboote.domain.values.ConvId
 import com.bigboote.domain.values.EffortId
-import com.bigboote.domain.values.MessageId
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger(SystemCollaborator::class.java)
@@ -13,13 +11,12 @@ private val logger = LoggerFactory.getLogger(SystemCollaborator::class.java)
 /**
  * Represents the `@system` built-in collaborator.
  *
- * [SystemCollaborator] is a thin service wrapper that posts messages on behalf
+ * [SystemCollaborator] is a thin service wrapper that posts direct messages on behalf
  * of `@system` via [ConversationCommandHandler]. It does not hold any state and
  * can be injected wherever system-level notifications are needed.
  *
- * DM conversations between `@system` and a target collaborator are created
- * on-demand by [ConversationCommandHandler.handle] (PostMessage) the first time
- * a message is sent — no explicit channel creation step is required.
+ * DM streams are created on-demand by [ConversationCommandHandler.handle] (PostDirectMessage)
+ * the first time a message is sent — no explicit channel creation step is required.
  *
  * Used by [com.bigboote.coordinator.reactors.SystemMessageReactor] to notify
  * collaborators of effort lifecycle events.
@@ -31,26 +28,28 @@ class SystemCollaborator(
 ) {
 
     /** The canonical `@system` collaborator name. */
-    val name: CollaboratorName = CollaboratorName.Individual("system")
+    val name: CollaboratorName.Individual = CollaboratorName.Individual("system")
 
     /**
      * Send a direct message from `@system` to [toName] in the context of [effortId].
      *
-     * Uses [ConvId.dm] for alphabetically-sorted party ordering, which ensures a
-     * single canonical DM stream regardless of which party initiates.
-     *
-     * The DM conversation is auto-created by [ConversationCommandHandler] if it
-     * does not yet exist.
+     * The DM is delivered to the stream `StreamName.DirectMessage(effortId, toName)`.
+     * The stream is created on-demand — no prior channel setup is needed.
      */
     suspend fun sendDm(effortId: EffortId, toName: CollaboratorName, body: String) {
-        val convId = ConvId.dm(name.simple, toName.simple).value
+        val toIndividual = toName as? CollaboratorName.Individual ?: run {
+            logger.warn(
+                "SystemCollaborator: sendDm target '{}' is not an Individual — skipping",
+                toName,
+            )
+            return
+        }
 
-        val cmd = PostMessage(
-            messageId = MessageId.generate(),
-            convId    = convId,
-            effortId  = effortId,
-            from      = name,
-            body      = body,
+        val cmd = PostDirectMessage(
+            effortId = effortId,
+            from     = name,
+            toName   = toIndividual,
+            body     = body,
         )
 
         try {

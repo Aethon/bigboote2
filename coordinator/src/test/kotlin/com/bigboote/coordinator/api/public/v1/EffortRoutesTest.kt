@@ -148,8 +148,8 @@ class EffortRoutesTest : DescribeSpec({
                           "name": "Agent Effort",
                           "goal": "Run agents",
                           "collaborators": [
-                            { "name": "lead-dev", "type": "HUMAN", "isLead": true },
-                            { "name": "code-bot", "type": "AGENT", "agentTypeId": "agenttype:coder", "isLead": false }
+                            { "name": "lead-dev", "type": "human", "isLead": true },
+                            { "name": "code-bot", "type": "agent", "agentTypeId": "coder", "isLead": false }
                           ]
                         }
                         """.trimIndent()

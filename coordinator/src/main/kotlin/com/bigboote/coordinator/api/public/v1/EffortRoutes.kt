@@ -44,9 +44,9 @@ private val logger = LoggerFactory.getLogger("com.bigboote.coordinator.api.publi
  * See API Design doc Section 3.1.
  */
 fun Route.effortRoutes() {
-    val commandHandler by inject<EffortCommandHandler>()
-    val projection by inject<EffortSummaryProjection>()
-    val readRepo by inject<EffortReadRepository>()
+    val commandHandler by application.inject<EffortCommandHandler>()
+    val projection by application.inject<EffortSummaryProjection>()
+    val readRepo by application.inject<EffortReadRepository>()
 
     route("/efforts") {
 

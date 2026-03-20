@@ -1,11 +1,13 @@
 package com.bigboote.coordinator.proxy.agent
 
-import com.bigboote.domain.events.ConversationEvent.MessagePosted
+import com.bigboote.domain.events.DirectMessageEvent
+import com.bigboote.domain.events.GroupChannelEvent
 import com.bigboote.domain.values.AgentId
 import com.bigboote.domain.values.AgentTypeId
 import com.bigboote.domain.values.CollaboratorName
 import com.bigboote.domain.values.EffortId
 import com.bigboote.domain.values.StreamName
+import kotlinx.datetime.Instant
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
@@ -39,16 +41,35 @@ class DockerAgentProxy(
 ) : AgentProxy {
 
     /**
-     * Phase 12 stub: agent message delivery will be implemented via the coordinator's
+     * Phase 13 stub: channel message delivery will be implemented via the coordinator's
      * SSE gateway subscription endpoint (`/internal/v1/agent/{id}/subscribe-conversation-events`).
-     * For now, log the delivery attempt so that Phase 13 integration tests can verify
-     * [com.bigboote.coordinator.reactors.MessageDeliveryReactor] invokes this method.
+     * For now, log the delivery attempt.
      */
-    override suspend fun deliverMessage(streamName: StreamName.Conversation, event: MessagePosted) {
+    override suspend fun deliverChannelMessage(
+        stream: StreamName.GroupChannel,
+        event: GroupChannelEvent.ChannelMessagePosted,
+        timestamp: Instant,
+    ) {
         logger.debug(
-            "DockerAgentProxy: deliverMessage stub — agent {} would receive message {} " +
-            "(Phase 12 SSE gateway delivery pending)",
-            agentId, event.messageId,
+            "DockerAgentProxy: deliverChannelMessage stub — agent {} would receive message {} " +
+            "in channel #{} (SSE gateway delivery pending)",
+            agentId, event.messageId, stream.channelName.simple,
+        )
+    }
+
+    /**
+     * Phase 13 stub: direct message delivery will be implemented via the coordinator's
+     * SSE gateway subscription endpoint.
+     */
+    override suspend fun deliverDirectMessage(
+        stream: StreamName.DirectMessage,
+        event: DirectMessageEvent.DirectMessagePosted,
+        timestamp: Instant,
+    ) {
+        logger.debug(
+            "DockerAgentProxy: deliverDirectMessage stub — agent {} would receive DM {} " +
+            "from @{} (SSE gateway delivery pending)",
+            agentId, event.messageId, event.from.simple,
         )
     }
 

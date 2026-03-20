@@ -3,16 +3,15 @@ package com.bigboote.coordinator.aggregates.conversation
 import com.bigboote.coordinator.aggregates.AggregateRepository
 import com.bigboote.coordinator.api.error.DomainException
 import com.bigboote.coordinator.api.error.ValidationException
-import com.bigboote.domain.aggregates.ConversationState
+import com.bigboote.domain.aggregates.GroupChannelState
 import com.bigboote.domain.commands.ConversationCommand.*
 import com.bigboote.domain.errors.DomainError
-import com.bigboote.domain.events.ConversationEvent
-import com.bigboote.domain.events.ConversationEvent.*
-import com.bigboote.domain.values.ConvId
-import com.bigboote.domain.values.EffortId
+import com.bigboote.domain.events.DirectMessageEvent
+import com.bigboote.domain.events.EventContext
+import com.bigboote.domain.events.GroupChannelEvent
+import com.bigboote.domain.values.MessageId
 import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.ExpectedVersion
-import kotlinx.datetime.Clock
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger(
@@ -30,185 +29,143 @@ private val logger = LoggerFactory.getLogger(
 interface ConversationCommandHandler {
     suspend fun handle(cmd: CreateChannel)
     suspend fun handle(cmd: PostMessage)
-    suspend fun handle(cmd: AddMember)
+    suspend fun handle(cmd: AddMembers)
+    suspend fun handle(cmd: PostDirectMessage)
 }
 
 /**
  * Production implementation of [ConversationCommandHandler].
  *
  * Supported commands:
- * - [CreateChannel]: create a named channel conversation. Emits [ConversationCreated].
- * - [PostMessage]: post a message to a conversation. Emits [MessagePosted].
- *   For DM conversations that do not yet exist (state == EMPTY), auto-emits
- *   [ConversationCreated] first (on-demand DM creation) then [MessagePosted]
- *   in a single atomic append.
- * - [AddMember]: add a collaborator to an existing conversation. Emits [MemberAdded].
+ * - [CreateChannel]: create a named group channel. Emits [GroupChannelEvent.ChannelCreated].
+ * - [PostMessage]: post a message to a group channel. Emits [GroupChannelEvent.ChannelMessagePosted].
+ *   The recipient set (`to`) is derived from the channel's current membership minus the sender.
+ * - [AddMembers]: add collaborators to an existing channel. Emits [GroupChannelEvent.MembersAdded].
+ * - [PostDirectMessage]: post a direct message to an individual. Emits [DirectMessageEvent.DirectMessagePosted].
+ *   DM streams are created on-demand (no explicit channel creation required).
  *
  * See Architecture doc Section 6.2 and API Design doc Section 3.4.
  */
 class ConversationCommandHandlerImpl(
     private val repo: AggregateRepository,
-    private val clock: Clock,
 ) : ConversationCommandHandler {
 
     /**
-     * Create a named channel conversation. The channel must not already exist on
+     * Create a named group channel. The channel must not already exist on
      * this effort (NoStream guarantees idempotency on re-create attempts).
      */
     override suspend fun handle(cmd: CreateChannel) {
-        val convId = cmd.convId
-        if (convId !is ConvId.Channel) {
-            throw ValidationException("CreateChannel requires a Channel ConvId, got: ${convId.value}")
-        }
-
-        val event = ConversationCreated(
-            convName = cmd.convName,
-            members = cmd.members,
-            createdAt = clock.now(),
+        val event = GroupChannelEvent.ChannelCreated(
+            members = cmd.members.filterIsInstance<com.bigboote.domain.values.CollaboratorName.Individual>(),
         )
 
         repo.append(
-            StreamName.Conversation(cmd.effortId, convId),
+            StreamName.GroupChannel(cmd.effortId, cmd.channelName),
             listOf(event),
             ExpectedVersion.NoStream,
         )
 
-        logger.info("Channel created: {} in effort {}", convId.value, cmd.effortId)
+        logger.info("Channel created: {} in effort {}", cmd.channelName.simple, cmd.effortId)
     }
 
     /**
-     * Post a message to a conversation.
+     * Post a message to a group channel.
      *
-     * If [PostMessage.convId] is null, throws a [ValidationException].
-     *
-     * For DirectMessage conversations that have not yet been created (state == EMPTY),
-     * this handler auto-creates the DM conversation on-demand before posting:
-     *   - Determines the other party from the ConvId string.
-     *   - Emits [ConversationCreated] and [MessagePosted] atomically.
-     *
-     * For Channel conversations in state EMPTY, throws [DomainError.ConversationNotFound]
-     * (channels must be explicitly created via [CreateChannel]).
+     * Loads the channel state to determine the full recipient list.
+     * Throws [DomainError.ConversationNotFound] if the channel does not exist.
      */
     override suspend fun handle(cmd: PostMessage) {
-        val rawConvId = cmd.convId
-            ?: throw ValidationException("PostMessage.convId must not be null")
+        val (state, version) = loadChannel(cmd.effortId, cmd.channelName)
+            ?: throw DomainException(DomainError.ConversationNotFound(cmd.channelName.simple))
 
-        val convId: ConvId = try {
-            ConvId.parse(rawConvId)
-        } catch (e: IllegalArgumentException) {
-            throw ValidationException("Invalid convId: '$rawConvId': ${e.message}")
-        }
+        val to = state.members.filter { it != cmd.from }.toSet()
 
-        val loadedState = maybeLoadConversation(cmd.effortId, convId)
-
-        if (loadedState == null) {
-            // EMPTY sentinel — conversation does not exist yet
-            when (convId) {
-                is ConvId.DirectMessage -> {
-                    // On-demand DM creation: emit ConversationCreated then MessagePosted atomically.
-                    // Derive the canonical channel name as "DM: @party1 + @party2".
-                    val dmName = com.bigboote.domain.values.CollaboratorName.Channel(
-                        "dm:${convId.party1}+${convId.party2}"
-                    )
-                    val members = listOf(
-                        com.bigboote.domain.values.CollaboratorName.from("@${convId.party1}"),
-                        com.bigboote.domain.values.CollaboratorName.from("@${convId.party2}"),
-                    )
-                    val created = ConversationCreated(
-                        convName = dmName,
-                        members = members,
-                        createdAt = clock.now(),
-                    )
-                    val posted = MessagePosted(
-                        messageId = cmd.messageId,
-                        from = cmd.from,
-                        body = cmd.body,
-                        postedAt = clock.now(),
-                    )
-                    repo.append(
-                        StreamName.Conversation(cmd.effortId, convId),
-                        listOf(created, posted),
-                        ExpectedVersion.NoStream,
-                    )
-                    logger.info(
-                        "DM conversation auto-created and first message posted: {} in effort {}",
-                        convId.value, cmd.effortId
-                    )
-                }
-
-                is ConvId.Channel -> {
-                    throw DomainException(DomainError.ConversationNotFound(rawConvId))
-                }
-            }
-        } else {
-            // Conversation exists — just append the message.
-            val event = MessagePosted(
-                messageId = cmd.messageId,
-                from = cmd.from,
-                body = cmd.body,
-                postedAt = clock.now(),
-            )
-            repo.append(
-                StreamName.Conversation(cmd.effortId, convId),
-                listOf(event),
-                ExpectedVersion.Exact(loadedState.second),
-            )
-            logger.info(
-                "Message posted to {} in effort {}: {}",
-                convId.value, cmd.effortId, cmd.messageId
-            )
-        }
-    }
-
-    /**
-     * Add a member to an existing conversation. Throws if the conversation does not exist.
-     * Throws if the member is already in the conversation (idempotency check).
-     */
-    override suspend fun handle(cmd: AddMember) {
-        val convId: ConvId = try {
-            ConvId.parse(cmd.convId)
-        } catch (e: IllegalArgumentException) {
-            throw ValidationException("Invalid convId: '${cmd.convId}': ${e.message}")
-        }
-
-        val (state, version) = maybeLoadConversation(cmd.effortId, convId)
-            ?: throw DomainException(DomainError.ConversationNotFound(cmd.convId))
-
-        if (state.members.any { it.toString() == cmd.member.toString() }) {
-            // Idempotent: member already present — no-op rather than error.
-            logger.debug(
-                "AddMember no-op: {} already in {} (effort {})",
-                cmd.member, cmd.convId, cmd.effortId
-            )
-            return
-        }
-
-        val event = MemberAdded(
-            member = cmd.member,
-            addedAt = clock.now(),
+        val event = GroupChannelEvent.ChannelMessagePosted(
+            messageId = MessageId.generate(),
+            from = cmd.from,
+            to = to,
+            body = cmd.body,
         )
 
         repo.append(
-            StreamName.Conversation(cmd.effortId, convId),
+            StreamName.GroupChannel(cmd.effortId, cmd.channelName),
             listOf(event),
             ExpectedVersion.Exact(version),
         )
 
         logger.info(
-            "Member {} added to {} in effort {}", cmd.member, cmd.convId, cmd.effortId
+            "Message posted to #{} in effort {} by {}",
+            cmd.channelName.simple, cmd.effortId, cmd.from.simple
+        )
+    }
+
+    /**
+     * Add members to an existing group channel.
+     *
+     * Throws [DomainError.ConversationNotFound] if the channel does not exist.
+     * Members already present are silently filtered out (idempotent).
+     */
+    override suspend fun handle(cmd: AddMembers) {
+        val (state, version) = loadChannel(cmd.effortId, cmd.channelName)
+            ?: throw DomainException(DomainError.ConversationNotFound(cmd.channelName.simple))
+
+        val newMembers = cmd.members.filter { m -> state.members.none { it == m } }.toSet()
+        if (newMembers.isEmpty()) {
+            logger.debug(
+                "AddMembers no-op: all members already in #{} (effort {})",
+                cmd.channelName.simple, cmd.effortId
+            )
+            return
+        }
+
+        val event = GroupChannelEvent.MembersAdded(members = newMembers)
+
+        repo.append(
+            StreamName.GroupChannel(cmd.effortId, cmd.channelName),
+            listOf(event),
+            ExpectedVersion.Exact(version),
+        )
+
+        logger.info(
+            "Members {} added to #{} in effort {}",
+            newMembers.map { it.simple }, cmd.channelName.simple, cmd.effortId
+        )
+    }
+
+    /**
+     * Post a direct message to an individual collaborator.
+     *
+     * DM streams are created on-demand — no explicit setup is required before posting.
+     * Uses [ExpectedVersion.Any] to allow the first message to create the stream.
+     */
+    override suspend fun handle(cmd: PostDirectMessage) {
+        val event = DirectMessageEvent.DirectMessagePosted(
+            messageId = MessageId.generate(),
+            from = cmd.from,
+            body = cmd.body,
+        )
+
+        repo.append(
+            StreamName.DirectMessage(cmd.effortId, cmd.toName),
+            listOf(event),
+            ExpectedVersion.Any,
+        )
+
+        logger.info(
+            "Direct message sent from @{} to @{} in effort {}",
+            cmd.from.simple, cmd.toName.simple, cmd.effortId
         )
     }
 
     // ---- private helpers ----
 
-    private suspend fun maybeLoadConversation(
-        effortId: EffortId,
-        convId: ConvId,
-    ) =
-        repo.maybeLoad(
-            ConversationEvent::class,
-            StreamName.Conversation(effortId, convId),
-            ConversationState::start,
-            ConversationState::apply
-        )
+    private suspend fun loadChannel(
+        effortId: com.bigboote.domain.values.EffortId,
+        channelName: com.bigboote.domain.values.CollaboratorName.Channel,
+    ) = repo.maybeLoad(
+        GroupChannelEvent::class,
+        StreamName.GroupChannel(effortId, channelName),
+        GroupChannelState::start,
+        { state, entry -> state.apply(entry) },
+    )
 }

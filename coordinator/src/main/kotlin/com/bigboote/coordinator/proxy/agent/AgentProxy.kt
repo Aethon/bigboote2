@@ -1,7 +1,6 @@
 package com.bigboote.coordinator.proxy.agent
 
 import com.bigboote.coordinator.proxy.CollaboratorProxy
-import com.bigboote.domain.events.ConversationEvent.MessagePosted
 import com.bigboote.domain.values.AgentId
 import com.bigboote.domain.values.AgentTypeId
 import com.bigboote.domain.values.EffortId
@@ -18,9 +17,10 @@ import com.bigboote.domain.values.EffortId
  * Used by [com.bigboote.coordinator.reactors.SpawnReactor] after container start,
  * and by Phase 15's EffortLifecycleReactor for pause/resume/stop signals.
  *
- * [deliverMessage] is a Phase 12 concern — the coordinator's gateway SSE subscription
- * endpoint for agents (`/internal/v1/agent/{id}/subscribe-conversation-events`) will
- * push messages. Phase 13 provides a log-only stub.
+ * Message delivery ([deliverChannelMessage], [deliverDirectMessage]) is handled via
+ * the coordinator's gateway SSE subscription endpoint for agents
+ * (`/internal/v1/agent/{id}/subscribe-conversation-events`). Phase 13 provides
+ * log-only stubs.
  *
  * See Architecture doc Sections 9.1, 10.2.
  */

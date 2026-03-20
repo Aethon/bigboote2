@@ -47,10 +47,10 @@ private val logger = LoggerFactory.getLogger("com.bigboote.coordinator.api.publi
  * See API Design doc Section 3.5.
  */
 fun Route.documentRoutes() {
-    val commandHandler by inject<DocumentCommandHandler>()
-    val projection     by inject<DocumentListProjection>()
-    val readRepo       by inject<DocumentReadRepository>()
-    val s3             by inject<S3DocumentStorage>()
+    val commandHandler by application.inject<DocumentCommandHandler>()
+    val projection     by application.inject<DocumentListProjection>()
+    val readRepo       by application.inject<DocumentReadRepository>()
+    val s3             by application.inject<S3DocumentStorage>()
 
     route("/efforts/{effortId}/documents") {
 

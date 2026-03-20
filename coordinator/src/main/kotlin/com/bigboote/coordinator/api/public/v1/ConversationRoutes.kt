@@ -31,21 +31,20 @@ private val logger = LoggerFactory.getLogger("com.bigboote.coordinator.api.publi
  * GET  /api/v1/efforts/{effortId}/conversations
  *      → list all conversations for the effort; returns 200 with [ConversationListResponse].
  *
- * GET  /api/v1/efforts/{effortId}/conversations/{convId}/messages?from=0&limit=50
- *      → paginated message list for a conversation; returns 200 with [MessageListResponse].
+ * GET  /api/v1/efforts/{effortId}/conversations/{channelName}/messages?from=0&limit=50
+ *      → paginated message list for a channel; returns 200 with [MessageListResponse].
  *
- * POST /api/v1/efforts/{effortId}/conversations/{convId}/members
- *      → AddMember command; returns 200 with [AddMemberResponse].
+ * POST /api/v1/efforts/{effortId}/conversations/{channelName}/members
+ *      → AddMembers command; returns 200 with [AddMemberResponse].
  *
- * Note: "PostMessage" is NOT exposed via REST in Phase 11. It is used internally
- * by the Agent Gateway (Phase 12) and WebSocket (Phase 13) layers.
+ * Note: "PostMessage" is NOT exposed via REST. It is used by the WebSocket layer.
  *
  * See API Design doc Section 3.4.
  */
 fun Route.conversationRoutes() {
-    val commandHandler by inject<ConversationCommandHandler>()
-    val projection     by inject<ConversationProjection>()
-    val readRepo       by inject<ConversationReadRepository>()
+    val commandHandler by application.inject<ConversationCommandHandler>()
+    val projection     by application.inject<ConversationProjection>()
+    val readRepo       by application.inject<ConversationReadRepository>()
 
     route("/efforts/{effortId}/conversations") {
 
@@ -57,8 +56,7 @@ fun Route.conversationRoutes() {
             val req = call.receive<CreateChannelRequest>()
             validateCreateChannelRequest(req)
 
-            val channelName = req.name.trim()
-            val convId = ConvId.channel(channelName)
+            val channelName = CollaboratorName.Channel(req.name.trim())
 
             val members: List<CollaboratorName> = req.members.map { nameStr ->
                 try {
@@ -68,28 +66,24 @@ fun Route.conversationRoutes() {
                 }
             }
 
-            // Use the channel name as the convName (prefixed "#channel")
-            val convName = CollaboratorName.Channel(channelName)
-
             val cmd = CreateChannel(
-                convId   = convId,
-                effortId = effortId,
-                convName = convName,
-                members  = members,
+                effortId    = effortId,
+                channelName = channelName,
+                members     = members,
             )
 
             commandHandler.handle(cmd)
 
-            // Begin tracking the new conversation stream for read-your-writes consistency.
-            projection.trackConversation(effortId, convId)
+            // Begin tracking the new channel stream for read-your-writes consistency.
+            projection.trackChannel(effortId, channelName)
 
-            logger.info("Channel created via API: {} in effort {}", convId.value, effortId)
+            logger.info("Channel created via API: #{} in effort {}", channelName.simple, effortId)
 
             call.respond(
                 HttpStatusCode.Created,
                 CreateChannelResponse(
-                    convId    = convId.value,
-                    convName  = convName.toString(),
+                    convId    = channelName.simple,
+                    convName  = channelName.toString(),
                     members   = req.members,
                     createdAt = Clock.System.now().toString(),
                 )
@@ -111,24 +105,24 @@ fun Route.conversationRoutes() {
         }
 
         // ------------------------------------------------------------------
-        // GET /api/v1/efforts/{effortId}/conversations/{convId}/messages
+        // GET /api/v1/efforts/{effortId}/conversations/{channelName}/messages
         // ------------------------------------------------------------------
-        get("/{convId}/messages") {
-            val effortId = parseEffortIdParam(call)
-            val convIdStr = parseConvIdParam(call)
+        get("/{channelName}/messages") {
+            val effortId    = parseEffortIdParam(call)
+            val channelName = parseChannelNameParam(call)
             val from  = call.request.queryParameters["from"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
             val limit = call.request.queryParameters["limit"]?.toIntOrNull()?.coerceIn(1, 200) ?: 50
 
-            // Verify the conversation exists before returning messages
-            readRepo.get(effortId, convIdStr)
-                ?: throw DomainException(DomainError.ConversationNotFound(convIdStr))
+            // Verify the channel exists before returning messages
+            readRepo.get(effortId, channelName)
+                ?: throw DomainException(DomainError.ConversationNotFound(channelName))
 
-            val messages = readRepo.getMessages(effortId, convIdStr, from, limit)
+            val messages = readRepo.getMessages(effortId, channelName, from, limit)
 
             call.respond(
                 HttpStatusCode.OK,
                 MessageListResponse(
-                    convId   = convIdStr,
+                    convId   = channelName,
                     messages = messages.map { it.toMessageResponse() },
                     from     = from,
                     limit    = limit,
@@ -137,34 +131,36 @@ fun Route.conversationRoutes() {
         }
 
         // ------------------------------------------------------------------
-        // POST /api/v1/efforts/{effortId}/conversations/{convId}/members
+        // POST /api/v1/efforts/{effortId}/conversations/{channelName}/members
         // ------------------------------------------------------------------
-        post("/{convId}/members") {
-            val effortId = parseEffortIdParam(call)
-            val convIdStr = parseConvIdParam(call)
+        post("/{channelName}/members") {
+            val effortId    = parseEffortIdParam(call)
+            val channelName = CollaboratorName.Channel(parseChannelNameParam(call))
             val req = call.receive<AddMemberRequest>()
 
             if (req.member.isBlank()) throw ValidationException("'member' must not be blank")
 
-            val member: CollaboratorName = try {
-                CollaboratorName.from(req.member)
+            val member: CollaboratorName.Individual = try {
+                val parsed = CollaboratorName.from(req.member)
+                parsed as? CollaboratorName.Individual
+                    ?: throw ValidationException("Only individual members (e.g. '@alice') can be added")
             } catch (e: IllegalArgumentException) {
                 throw ValidationException("Invalid member name '${req.member}': ${e.message}")
             }
 
-            val cmd = AddMember(
-                convId   = convIdStr,
-                effortId = effortId,
-                member   = member,
+            val cmd = AddMembers(
+                effortId    = effortId,
+                channelName = channelName,
+                members     = setOf(member),
             )
 
             commandHandler.handle(cmd)
 
-            logger.info("Member {} added to {} in effort {} via API", req.member, convIdStr, effortId)
+            logger.info("Member {} added to #{} in effort {} via API", req.member, channelName.simple, effortId)
 
             call.respond(
                 HttpStatusCode.OK,
-                AddMemberResponse(convId = convIdStr, member = req.member)
+                AddMemberResponse(convId = channelName.simple, member = req.member)
             )
         }
     }
@@ -182,15 +178,10 @@ private fun parseEffortIdParam(call: ApplicationCall): EffortId {
     }
 }
 
-private fun parseConvIdParam(call: ApplicationCall): String {
-    val raw = call.parameters["convId"]
-    if (raw.isNullOrBlank()) throw ValidationException("Missing convId path parameter")
-    // Validate it parses as a valid ConvId
-    try {
-        ConvId.parse(raw)
-    } catch (e: IllegalArgumentException) {
-        throw ValidationException("Invalid convId: '$raw': ${e.message}")
-    }
+private fun parseChannelNameParam(call: ApplicationCall): String {
+    val raw = call.parameters["channelName"]
+    if (raw.isNullOrBlank()) throw ValidationException("Missing channelName path parameter")
+    if (raw.isBlank()) throw ValidationException("channelName must not be blank")
     return raw
 }
 

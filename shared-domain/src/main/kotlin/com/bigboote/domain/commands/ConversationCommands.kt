@@ -22,4 +22,11 @@ sealed interface ConversationCommand {
         val channelName: CollaboratorName.Channel,
         val members: Set<CollaboratorName.Individual>,
     ) : ConversationCommand
+
+    data class PostDirectMessage(
+        val effortId: EffortId,
+        val from: CollaboratorName.Individual,
+        val toName: CollaboratorName.Individual,
+        val body: String,
+    ) : ConversationCommand
 }

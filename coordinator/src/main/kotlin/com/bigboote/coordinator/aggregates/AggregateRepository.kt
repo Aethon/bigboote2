@@ -1,6 +1,7 @@
 package com.bigboote.coordinator.aggregates
 
-import com.bigboote.domain.aggregates.EventLogEntry
+import com.bigboote.domain.events.Event
+import com.bigboote.domain.events.EventLogEntry
 import com.bigboote.domain.values.StreamName
 import com.bigboote.events.eventstore.AppendResult
 import com.bigboote.events.eventstore.EventStore
@@ -24,7 +25,7 @@ class AggregateRepository(private val eventStore: EventStore) {
      * them through [apply]. Returns the reconstructed state and the last
      * stream version (-1 if the stream does not exist / is empty).
      */
-    suspend fun <E : Any, S> load(
+    suspend fun <E : Event, S> load(
         eventKlass: KClass<E>,
         streamName: StreamName<E>,
         empty: S,
@@ -39,7 +40,7 @@ class AggregateRepository(private val eventStore: EventStore) {
         return state to result.lastStreamPosition
     }
 
-    suspend fun <E : Any, S> maybeLoad(
+    suspend fun <E : Event, S> maybeLoad(
         eventKlass: KClass<E>,
         streamName: StreamName<E>,
         start: (EventLogEntry<E>) -> S,
@@ -73,7 +74,7 @@ class AggregateRepository(private val eventStore: EventStore) {
     /**
      * Append events to a stream with optimistic concurrency control.
      */
-    suspend fun <E : Any> append(
+    suspend fun <E : Event> append(
         streamName: StreamName<E>,
         events: List<E>,
         expectedVersion: ExpectedVersion,

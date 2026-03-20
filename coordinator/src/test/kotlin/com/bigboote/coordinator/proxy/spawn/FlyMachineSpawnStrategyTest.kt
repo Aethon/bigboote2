@@ -51,7 +51,7 @@ class FlyMachineSpawnStrategyTest : DescribeSpec({
 
     val agentId     = AgentId("agent:fly-test-001")
     val effortId    = EffortId("effort:fly-test-001")
-    val agentTypeId = AgentTypeId.of("fly-test-type")
+    val agentTypeId = AgentTypeId("fly-test-type")
     val collab      = CollaboratorName.Individual("fly-agent")
 
     val spawnConfig = SpawnConfig(
