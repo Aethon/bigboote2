@@ -17,6 +17,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.datetime.Clock
+import kotlinx.serialization.SerializationException
 import org.koin.ktor.ext.inject
 import org.slf4j.LoggerFactory
 
@@ -54,7 +55,11 @@ fun Route.effortRoutes() {
         // POST /api/v1/efforts/create
         // ------------------------------------------------------------------
         post("/create") {
-            val req = call.receive<CreateEffortRequest>()
+            val req = try {
+                call.receive<CreateEffortRequest>()
+            } catch (e: Exception) {
+                throw ValidationException(e.message ?: "Invalid JSON")
+            }
             validateCreateRequest(req)
 
             val collaborators = req.collaborators.map { it.toDomain() }

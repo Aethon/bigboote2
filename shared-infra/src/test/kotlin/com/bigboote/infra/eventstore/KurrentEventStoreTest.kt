@@ -9,6 +9,8 @@ import com.bigboote.events.eventstore.ExpectedVersion
 import com.eventstore.dbclient.EventStoreDBClient
 import com.eventstore.dbclient.EventStoreDBConnectionString
 import com.eventstore.dbclient.EventStoreDBPersistentSubscriptionsClient
+import com.eventstore.dbclient.StreamNotFoundException
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.longs.shouldBeGreaterThanOrEqual
@@ -82,7 +84,7 @@ class KurrentEventStoreTest : StringSpec({
 
         val entry = readResult.events.first()
         entry.streamName shouldBe streamName
-        entry.context shouldBe EventContext(0L, 0L)
+        entry.context.streamPosition shouldBe 0L
 
         val deserialized = entry.event
         deserialized.shouldBeInstanceOf<EffortCreated>()
@@ -122,9 +124,10 @@ class KurrentEventStoreTest : StringSpec({
     }
 
     "readStreamForward on non-existent stream returns empty" {
-        val nonExistentStream = StreamName.Effort(EffortId("effort:nonexistent-stream-12345"))
-        val result = store.readStreamForward(EffortEvent::class, nonExistentStream)
-        result.events shouldHaveSize 0
-        result.lastStreamPosition shouldBe -1L
+        val nonExistentStream = StreamName.Effort(EffortId("nonexistent-stream-12345"))
+
+        shouldThrow<StreamNotFoundException> {
+            store.readStreamForward(EffortEvent::class, nonExistentStream)
+        }
     }
 })

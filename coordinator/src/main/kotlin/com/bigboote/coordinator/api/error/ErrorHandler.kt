@@ -3,6 +3,7 @@ package com.bigboote.coordinator.api.error
 import com.bigboote.domain.errors.DomainError
 import io.ktor.http.*
 import io.ktor.server.application.*
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.response.*
 import org.slf4j.LoggerFactory

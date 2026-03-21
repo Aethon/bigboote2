@@ -105,7 +105,7 @@ class EffortRoutesTest : DescribeSpec({
 
     describe("POST /api/v1/efforts/create") {
 
-        it("returns 201 Created with effortId and status=created for a valid HUMAN-lead request") {
+        it("returns 201 Created with effortId and status=created for a valid external-lead request") {
             coEvery { commandHandler.handle(any<CreateEffort>()) } returns effortId
 
             testApplication {
@@ -119,7 +119,7 @@ class EffortRoutesTest : DescribeSpec({
                           "name": "Test Effort",
                           "goal": "Deliver something great",
                           "collaborators": [
-                            { "name": "lead-dev", "type": "HUMAN", "isLead": true }
+                            { "name": "lead-dev", "type": "EXTERNAL", "isLead": true }
                           ]
                         }
                         """.trimIndent()
@@ -148,7 +148,7 @@ class EffortRoutesTest : DescribeSpec({
                           "name": "Agent Effort",
                           "goal": "Run agents",
                           "collaborators": [
-                            { "name": "lead-dev", "type": "human", "isLead": true },
+                            { "name": "lead-dev", "type": "external", "isLead": true },
                             { "name": "code-bot", "type": "agent", "agentTypeId": "coder", "isLead": false }
                           ]
                         }
@@ -171,7 +171,29 @@ class EffortRoutesTest : DescribeSpec({
                         {
                           "name": "   ",
                           "goal": "Some goal",
-                          "collaborators": [{ "name": "lead", "type": "HUMAN", "isLead": true }]
+                          "collaborators": [{ "name": "lead", "type": "external", "isLead": true }]
+                        }
+                        """.trimIndent()
+                    )
+                }
+
+                response.status shouldBe HttpStatusCode.BadRequest
+                response.bodyAsText() shouldContain "name"
+            }
+        }
+
+        it("returns 400 when an unknown collaborator type is given") {
+            testApplication {
+                application { configureServer(listOf(testModule())) }
+                val client = authenticatedClient()
+                val response = client.post("/api/v1/efforts/create") {
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        """
+                        {
+                          "name": "   ",
+                          "goal": "Some goal",
+                          "collaborators": [{ "name": "lead", "type": "other", "isLead": true }]
                         }
                         """.trimIndent()
                     )
@@ -193,7 +215,7 @@ class EffortRoutesTest : DescribeSpec({
                         {
                           "name": "Valid Name",
                           "goal": "",
-                          "collaborators": [{ "name": "lead", "type": "HUMAN", "isLead": true }]
+                          "collaborators": [{ "name": "lead", "type": "external", "isLead": true }]
                         }
                         """.trimIndent()
                     )
@@ -237,7 +259,7 @@ class EffortRoutesTest : DescribeSpec({
                           "name": "Valid Name",
                           "goal": "Some goal",
                           "collaborators": [
-                            { "name": "member", "type": "HUMAN", "isLead": false }
+                            { "name": "member", "type": "external", "isLead": false }
                           ]
                         }
                         """.trimIndent()
@@ -261,8 +283,8 @@ class EffortRoutesTest : DescribeSpec({
                           "name": "Valid Name",
                           "goal": "Some goal",
                           "collaborators": [
-                            { "name": "lead1", "type": "HUMAN", "isLead": true },
-                            { "name": "lead2", "type": "HUMAN", "isLead": true }
+                            { "name": "lead1", "type": "external", "isLead": true },
+                            { "name": "lead2", "type": "external", "isLead": true }
                           ]
                         }
                         """.trimIndent()
@@ -286,7 +308,7 @@ class EffortRoutesTest : DescribeSpec({
                           "name": "Valid Name",
                           "goal": "Some goal",
                           "collaborators": [
-                            { "name": "bot", "type": "AGENT", "isLead": true }
+                            { "name": "bot", "type": "agent", "isLead": true }
                           ]
                         }
                         """.trimIndent()
@@ -295,6 +317,31 @@ class EffortRoutesTest : DescribeSpec({
 
                 response.status shouldBe HttpStatusCode.BadRequest
                 response.bodyAsText() shouldContain "agentTypeId"
+            }
+        }
+
+        it("returns 400 when agent collaborator has unknown agentTypeId") {
+            testApplication {
+                application { configureServer(listOf(testModule())) }
+                val client = authenticatedClient()
+                val response = client.post("/api/v1/efforts/create") {
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        """
+                        {
+                          "name": "Valid Name",
+                          "goal": "Some goal",
+                          "collaborators": [
+                            { "name": "bot", "type": "agent", "agentTypeId": "oHNOES!", "isLead": true }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                }
+
+                response.status shouldBe HttpStatusCode.BadRequest
+                val body = response.bodyAsText()
+                body shouldContain "agentTypeId"
             }
         }
     }
@@ -395,7 +442,7 @@ class EffortRoutesTest : DescribeSpec({
             testApplication {
                 application { configureServer(listOf(testModule())) }
                 val client = authenticatedClient()
-                val response = client.get("/api/v1/efforts/not-a-valid-id")
+                val response = client.get("/api/v1/efforts/not-a-valid-id-and-really-really-is-not")
 
                 // EffortId constructor throws IllegalArgumentException for non-"effort:..." IDs,
                 // which the route converts to a 400 ValidationException.

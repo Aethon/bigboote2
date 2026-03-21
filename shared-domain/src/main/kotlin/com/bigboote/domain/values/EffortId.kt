@@ -12,7 +12,7 @@ import kotlinx.serialization.encoding.Encoder
 @Serializable(with = EffortId.Serializer::class)
 value class EffortId(val value: String) {
     init {
-        // TODO: validate format
+        require(value.length < 16) { "EffortId must be 21 characters long, got: ${value.length}" }
     }
 
     override fun toString(): String = value
