@@ -59,41 +59,51 @@ class BigbooteNanoIdTest : DescribeSpec({
         }
     }
 
-    describe("requirePrefixed") {
-        it("allows a valid ID") {
-            BigbooteNanoId.requirePrefixed("AA", "AA-AAAAAAAAAAAAAAAAAAAAA")
-        }
+    fun requirePrefixedTests(desc: String, idType: String, callSubject: (String, String) -> Unit) {
+        describe("requirePrefixed $desc") {
+            it("allows a valid ID") {
+                callSubject("AA", "AA-AAAAAAAAAAAAAAAAAAAAA")
+            }
 
-        badPrefixes.forEach { prefix ->
-            it("throws when a bad prefix is provided: \"$prefix\"") {
-                shouldThrow<IllegalArgumentException> { BigbooteNanoId.requirePrefixed(prefix, "$prefix-AAAAAAAAAAAAAAAAAAAAA") }
-                    .message shouldBe "Invalid prefix: must be up to $EXPECTED_MAX_PREFIX_LENGTH uppercase letters"
+            badPrefixes.forEach { prefix ->
+                it("throws when a bad prefix is provided: \"$prefix\"") {
+                    shouldThrow<IllegalArgumentException> {
+                        callSubject(
+                            prefix,
+                            "$prefix-AAAAAAAAAAAAAAAAAAAAA"
+                        )
+                    }
+                        .message shouldBe "Invalid prefix: must be up to $EXPECTED_MAX_PREFIX_LENGTH uppercase letters"
+                }
+            }
+
+            badPrefixes.forEach { prefix ->
+                val case = "$prefix-AAAAAAAAAAAAAAAAAAAAA"
+                it("throws when a bad ID is provided: \"$case\"") {
+                    shouldThrow<IllegalArgumentException> { callSubject("AA", case) }
+                        .message shouldBe "Invalid $idType: must be $EXPECTED_LENGTH numbers and letters (except lowercase 'l', uppercase 'I', and uppercase 'O') and must be prefixed with 'AA-'."
+                }
+            }
+
+            badIds.forEach { id ->
+                val case = "AA-$id"
+                it("throws when a bad ID is provided: \"$case\"") {
+                    shouldThrow<IllegalArgumentException> { callSubject("AA", case) }
+                        .message shouldBe "Invalid $idType: must be $EXPECTED_LENGTH numbers and letters (except lowercase 'l', uppercase 'I', and uppercase 'O') and must be prefixed with 'AA-'."
+                }
             }
         }
-
-        badPrefixes.forEach { prefix ->
-            val case = "$prefix-AAAAAAAAAAAAAAAAAAAAA"
-            it("throws when a bad ID is provided: \"$case\"") {
-                shouldThrow<IllegalArgumentException> { BigbooteNanoId.requirePrefixed("AA", case) }
-                    .message shouldBe "Invalid ID: must be $EXPECTED_LENGTH numbers and letters (except lowercase 'l', uppercase 'I', and uppercase 'O') and must be prefixed with 'AA-'."
-            }
-        }
-
-        badIds.forEach { id ->
-            val case = "AA-$id"
-            it("throws when a bad ID is provided: \"$case\"") {
-                shouldThrow<IllegalArgumentException> { BigbooteNanoId.requirePrefixed("AA",case) }
-                    .message shouldBe "Invalid ID: must be $EXPECTED_LENGTH numbers and letters (except lowercase 'l', uppercase 'I', and uppercase 'O') and must be prefixed with 'AA-'."
-            }
-        }
-
     }
+
+    requirePrefixedTests("with no ID type", "ID", BigbooteNanoId::requirePrefixed)
+    requirePrefixedTests("with AaaaahId ID type", "AaaaahId") { p, v -> BigbooteNanoId.requirePrefixed(p, v, "AaaaahId") }
+
 
 }) {
     companion object {
 
         // These are replicated here to create inertia
-        const  val EXPECTED_LENGTH = 21
+        const val EXPECTED_LENGTH = 21
         const val EXPECTED_MAX_PREFIX_LENGTH = 5
         const val EXPECTED_ALPHABET = "1234567890abcdefghijkmnopqrtuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"
 

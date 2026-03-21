@@ -27,8 +27,6 @@ object BigbooteNanoId {
 
     private val alphabetChars = ALPHABET.toCharArray()
     private val pattern = Regex("^[${ALPHABET}]{$LENGTH}$")
-    private const val ERROR_MESSAGE =
-        "Invalid ID: must be $LENGTH numbers and letters (except lowercase 'l', uppercase 'I', and uppercase 'O')"
 
     private val prefixPattern = Regex("^[A-Z]{1,$MAX_PREFIX_LENGTH}")
 
@@ -52,12 +50,14 @@ object BigbooteNanoId {
     }
 
     fun require(value: String) {
-        require(pattern.matches(value)) { ERROR_MESSAGE }
+        require(pattern.matches(value)) { errorMessage("ID") }
     }
 
-    fun requirePrefixed(prefix: String, value: String) {
+    fun requirePrefixed(prefix: String, value: String) = requirePrefixed(prefix, value, "ID")
+
+    fun requirePrefixed(prefix: String, value: String, idType: String) {
         requirePrefix(prefix)
-        require(value.startsWith(prefix) && value[prefix.length] == '-') { prefixedError(prefix) }
+        require(value.startsWith(prefix) && value[prefix.length] == '-') { prefixedErrorMessage(prefix, idType) }
         require(
             pattern.matches(
                 value.subSequence(
@@ -65,12 +65,16 @@ object BigbooteNanoId {
                     value.length
                 )
             )
-        ) { prefixedError(prefix) }
+        ) { prefixedErrorMessage(prefix, idType) }
     }
 
     private fun requirePrefix(prefix: String) {
         require(prefix.matches(prefixPattern)) { "Invalid prefix: must be up to $MAX_PREFIX_LENGTH uppercase letters" }
     }
 
-    private fun prefixedError(prefix: String) = "$ERROR_MESSAGE and must be prefixed with '$prefix-'."
+    private fun errorMessage(idType: String) =
+        "Invalid $idType: must be $LENGTH numbers and letters (except lowercase 'l', uppercase 'I', and uppercase 'O')"
+
+    private fun prefixedErrorMessage(prefix: String, idType: String) =
+        "${errorMessage(idType)} and must be prefixed with '$prefix-'."
 }

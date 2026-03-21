@@ -12,19 +12,15 @@ import kotlinx.serialization.encoding.Encoder
 @Serializable(with = AgentId.Serializer::class)
 value class AgentId(val value: String) {
     init {
-        require(value.length <= MAX_SLUG_LENGTH) {
-            "AgentId value must be at most $MAX_SLUG_LENGTH characters, got: ${value.length}"
-        }
-        // TODO: validate character set
+        BigbooteNanoId.requirePrefixed(PREFIX, value, "AgentId")
     }
 
     override fun toString(): String = value
 
     companion object {
 
-        private const val MAX_SLUG_LENGTH = 64
-
-        fun generate(): AgentId = AgentId(NanoIdUtils.randomNanoId())
+        const val PREFIX = "AG"
+        fun generate(): AgentId = AgentId(BigbooteNanoId.generatePrefixed(PREFIX))
 
     }
 

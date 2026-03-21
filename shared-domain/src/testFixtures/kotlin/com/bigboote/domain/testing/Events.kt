@@ -84,7 +84,7 @@ object Events {
 
     val agentSpawnRequested = Case(
         EffortEvent.AgentSpawnRequested(
-            agentId = AgentId("agent:spawn123test"),
+            agentId = AgentId("AG-SPAWNTEST000000000000"),
             agentTypeId = AgentTypeId("lead-eng"),
             collaboratorName = CollaboratorName.Individual("lead-dev"),
             gatewayToken = "550e8400-e29b-41d4-a716-446655440000",
